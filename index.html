@@ -318,6 +318,30 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
   }
   td.num:empty{display:none}
 
+  /* Les règles ci-dessus visent les colonnes du tableau des Pals par leur
+     position. Les catalogues ont d'autres colonnes aux mêmes rangs : sans
+     ces reprises, le nom d'une compétence hériterait de la marge prévue
+     pour un élément, et la description s'écraserait sur les chiffres. */
+  #t-skills td:nth-child(2),#t-passives td:nth-child(2),
+  #t-breed td:nth-child(2){margin-bottom:0}
+  #t-skills td:nth-child(3),#t-passives td:nth-child(3){margin-bottom:0}
+
+  #t-skills td:first-child,#t-passives td:first-child,
+  #t-breed td:first-child{margin-bottom:8px}
+  #t-skills .desc,#t-passives .desc{max-width:none;margin-top:9px;display:block}
+  #t-passives .users{max-width:none;margin-top:7px;display:block}
+
+  /* Le rang d'un passif est une pastille, pas une valeur chiffrée : la
+     grille à quatre colonnes des stats ne lui convient pas. */
+  #t-passives td.num{width:auto;border-top:0;padding-top:0;margin:0 0 6px}
+  #t-passives td.num::before{display:none}
+
+  /* Un couple de parents se lit sur une ligne, pas en deux blocs empilés. */
+  #t-breed tbody tr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  #t-breed td{flex:1 1 42%}
+  #t-breed td:first-child::after{content:"+";position:absolute;right:-9px;color:var(--muted)}
+  #t-breed td:first-child{position:relative}
+
   .sheet{max-height:88vh;padding:20px 14px 30px}
   .sheet h2{font-size:27px}
   .importer textarea{min-height:110px}
@@ -1941,6 +1965,7 @@ const chips=document.getElementById("chips");
 Object.keys(EL).forEach(k=>{
   const b=document.createElement("button");
   b.className="chip";
+  b.dataset.el=k; // permet à readURL de rétablir l'état pressé
   b.innerHTML=`<img class="ei" src="data:image/png;base64,${ICO_EL[k]}" alt="">${LABEL[k]||k}`;
   b.style.setProperty("--c",EL[k]); b.setAttribute("aria-pressed","false");
   b.onclick=()=>{
@@ -2186,6 +2211,7 @@ function parentsFor(name){
 function render(){
   clearTimeout(searchTimer); // désamorce un rendu différé encore en attente
   syncViews();
+  writeURL();
   if(state.view==="skills")   return renderSkills();
   if(state.view==="passives") return renderPassives();
   if(state.view==="breed")    return renderBreed();
@@ -2498,6 +2524,49 @@ document.getElementById("doExport").onclick=async()=>{
   }
 };
 
+/* ---------- État dans l'URL ----------
+   Sans ça, « regarde cette compétence » oblige à décrire une suite de clics.
+   On n'y met que ce qui se partage : la vue, la recherche, les éléments, la
+   cible de reproduction. Le tri et le curseur restent locaux. */
+function writeURL(){
+  const p=new URLSearchParams();
+  if(state.view!=="pals") p.set("v",state.view);
+  if(state.q) p.set("q",state.q);
+  if(state.els.size) p.set("e",[...state.els].join(","));
+  if(state.job) p.set("m",state.job);
+  if(state.role) p.set("r",state.role);
+  if(state.view==="breed" && state.target) p.set("c",state.target);
+  const url=p.toString() ? "?"+p : location.pathname;
+  /* replaceState lève quand la page n'a pas d'origine exploitable — un
+     fichier ouvert directement depuis le disque, notamment. Ce fichier est
+     conçu pour marcher ainsi : l'URL est un confort, jamais une condition
+     du rendu. */
+  try{ history.replaceState(null,"",url); }catch(e){}
+}
+
+function readURL(){
+  const p=new URLSearchParams(location.search);
+  const v=p.get("v");
+  if(v && VIEWS[v]) state.view=v;
+  state.q=p.get("q")||"";
+  (p.get("e")||"").split(",").filter(k=>EL[k]).forEach(k=>state.els.add(k));
+  const m=p.get("m"); if(m) state.job=m;
+  const r=p.get("r"); if(r) state.role=r;
+  const c=p.get("c"); if(c && BREED[c]) state.target=c;
+
+  /* Les contrôles doivent refléter l'URL, sinon un lien partagé afficherait
+     des résultats filtrés avec des sélecteurs vides. */
+  document.getElementById("q").value=state.q;
+  if(state.job) jobSel.value=state.job;
+  if(state.role) document.getElementById("role").value=state.role;
+  if(state.target) targetSel.value=state.target;
+  chips.querySelectorAll(".chip").forEach(b=>{
+    const k=b.dataset.el;
+    if(k) b.setAttribute("aria-pressed",String(state.els.has(k)));
+  });
+}
+
+readURL();
 syncHead(); // pose aria-sort="none" dès le départ, avant toute interaction
 syncCatHead("sk-sortable","sortS","dirS");
 syncCatHead("ps-sortable","sortP","dirP");
