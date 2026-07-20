@@ -1516,6 +1516,16 @@ Object.entries(VIEWS).forEach(([k,v])=>{
   const b=document.createElement("button");
   b.type="button"; b.dataset.v=k; b.setAttribute("role","tab");
   b.setAttribute("aria-selected",String(k===state.view));
+  /* Sans ce lien, role="tab" annonce un onglet sans jamais dire ce qu'il
+     pilote : une promesse d'ARIA que le balisage ne tient pas. */
+  b.id=`tab-${k}`;
+  b.setAttribute("aria-controls",v.table);
+  const panel=document.getElementById(v.table);
+  panel.setAttribute("role","tabpanel");
+  panel.setAttribute("aria-labelledby",b.id);
+  /* Un onglet inactif sort du parcours de tabulation : les flèches servent
+     à circuler entre onglets, la tabulation à en sortir. */
+  b.tabIndex = k===state.view ? 0 : -1;
   b.innerHTML=`${v.label}<b>${v.n()}</b>`;
   b.onclick=()=>setView(k);
   /* Flèches gauche/droite entre onglets : c'est le comportement attendu
@@ -1548,8 +1558,11 @@ function setView(v){
 
 function syncViews(){
   const cfg=VIEWS[state.view];
-  viewBar.querySelectorAll("button").forEach(b=>
-    b.setAttribute("aria-selected",String(b.dataset.v===state.view)));
+  viewBar.querySelectorAll("button").forEach(b=>{
+    const on=b.dataset.v===state.view;
+    b.setAttribute("aria-selected",String(on));
+    b.tabIndex=on?0:-1;
+  });
   Object.values(VIEWS).forEach(v=>
     document.getElementById(v.table).hidden = v.table!==cfg.table);
   ["sort","job","role"].forEach(id=>
@@ -1719,8 +1732,9 @@ function renderPassives(){
   const list=filteredPassives();
   document.getElementById("count").textContent=`${list.length} / ${PSKILLS.length} passifs`;
   document.getElementById("empty").hidden=list.length>0;
-  document.getElementById("rows-passives").innerHTML=list.map(s=>`
-    <tr tabindex="0">
+  passiveRows=list;
+  document.getElementById("rows-passives").innerHTML=list.map((s,i)=>`
+    <tr data-p="${i}" tabindex="0">
       <td><span class="pname">${s[0]}</span>${s[0]!==s[4]?`<span class="en">${s[4]}</span>`:""}</td>
       <td class="num" data-l="Rang"><span class="rank" data-r="${s[1]}">${s[1]>0?"+"+s[1]:s[1]}</span></td>
       <td><span class="desc">${s[2]||"—"}</span></td>
@@ -1729,7 +1743,7 @@ function renderPassives(){
     </tr>`).join("");
 }
 
-let skillRows=[];
+let skillRows=[], passiveRows=[];
 
 function render(){
   clearTimeout(searchTimer); // désamorce un rendu différé encore en attente
@@ -1920,6 +1934,37 @@ function openSkill(i){
         ? `<p class="users">${learners.map(n=>`<b>${n}</b>`).join(", ")}</p>`
         : `<p class="todo">Aucun Pal ne l'apprend naturellement.${
             s[4]?" Elle s'obtient par fruit de compétence.":""}</p>`}
+    </div>`;
+  sheet.setAttribute("data-open","");
+}
+
+/* Un passif : même contrat que les compétences. Les lignes étaient déjà
+   focusables et donnaient l'illusion d'être cliquables sans rien faire. */
+document.getElementById("rows-passives").addEventListener("click",e=>{
+  const tr=e.target.closest("tr"); if(tr) openPassive(+tr.dataset.p);
+});
+document.getElementById("rows-passives").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){ const tr=e.target.closest("tr"); if(tr) openPassive(+tr.dataset.p); }
+});
+function openPassive(i){
+  const s=passiveRows[i]; if(!s) return;
+  const innate=s[3];
+  const RANK={4:"Légendaire",3:"Excellent",2:"Bon",1:"Utile",
+              "-1":"Handicapant","-2":"Mauvais","-3":"Très mauvais"};
+  body.innerHTML=`
+    <div>
+      <p class="mini">Compétence passive · rang ${s[1]>0?"+"+s[1]:s[1]}${
+        RANK[s[1]]?" · "+RANK[s[1]]:""}</p>
+      <h2>${s[0]}</h2>
+      ${s[0]!==s[4]?`<p class="en-full">${s[4]}</p>`:""}
+      <p class="desc" style="max-width:52ch">${s[2]||"Aucun effet décrit."}</p>
+    </div>
+    <div>
+      <p class="mini">Inné chez ${innate.length} Pal${innate.length>1?"s":""}</p>
+      ${innate.length
+        ? `<p class="users">${innate.map(n=>`<b>${n}</b>`).join(", ")}</p>`
+        : `<p class="todo">Aucune espèce ne le porte d'origine : il s'obtient
+             au hasard à la capture ou par reproduction.</p>`}
     </div>`;
   sheet.setAttribute("data-open","");
 }
