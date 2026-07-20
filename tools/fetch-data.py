@@ -145,6 +145,39 @@ def fmt_skills(skills, names):
     return "\n".join(lines).rstrip(",")
 
 
+def unique_combos(names):
+    """Couples de parents donnant un enfant imposé, hors calcul de moyenne.
+
+    Ils vivent dans le paramètre uniqueCombos du modèle {{Breeding}} de
+    chaque page, au format « Parent + Parent = Enfant », et non dans Cargo :
+    la table ne fait que signaler qu'un Pal en résulte, sans dire de qui.
+    """
+    combos, param = [], re.compile(r"\|uniqueCombos\s*=(.*?)(?=\n\s*\||\n\}\})", re.S)
+    for i in range(0, len(names), 40):
+        batch = names[i:i + 40]
+        params = urllib.parse.urlencode({
+            "action": "query", "titles": "|".join(batch), "prop": "revisions",
+            "rvprop": "content", "rvslots": "main", "format": "json",
+        })
+        req = urllib.request.Request(f"{API}?{params}", headers={"User-Agent": UA})
+        data = json.load(urllib.request.urlopen(req, timeout=30))
+        for page in data["query"]["pages"].values():
+            revs = page.get("revisions")
+            if not revs:
+                continue
+            m = param.search(revs[0]["slots"]["main"]["*"])
+            if not m:
+                continue
+            for row in m.group(1).split(";"):
+                pair = re.match(r"\s*(.+?)\s*\+\s*(.+?)\s*=\s*(.+?)\s*$", row)
+                if pair:
+                    combos.append(tuple(g.strip() for g in pair.groups()))
+        print(f"  combos… {min(i + 40, len(names))}/{len(names)}", end="\r")
+        time.sleep(0.3)
+    print(" " * 40, end="\r")
+    return combos
+
+
 def fetch_i18n(which, lang="fr"):
     """Nom et description traduits, indexés par le libellé anglais.
 
@@ -215,6 +248,13 @@ def main():
     print(f"  {len(ws)} aptitudes, {len(sk)} liens Pal-compétence, "
           f"{len(pas)} liens Pal-passif")
     print(f"  catalogues : {len(all_sk)} compétences, {len(all_pas)} passifs")
+
+    breed = cargo("PalBreeding",
+                  "palName,breedingRank,isUniqueCombo,combiDuplicatePriority")
+    print(f"  reproduction : {len(breed)} Pals — lecture des combos uniques…")
+    combos = [c for c in unique_combos(names)
+              if all(x in known for x in c)]
+    print(f"  combos uniques : {len(combos)}")
 
     tr_sk = fetch_i18n("pal_attacks")
     tr_pas = fetch_i18n("pal_passives")
@@ -319,12 +359,31 @@ def main():
             )
         )
 
+    # --- Reproduction -----------------------------------------------------
+    # BREED : nom -> [rang de reproduction, priorité de départage, issu d'un
+    # combo unique]. Les Pals issus d'un combo unique sont exclus du calcul
+    # par moyenne, sans quoi ils sortiraient d'accouplements ordinaires.
+    breeding = []
+    for r in sorted(breed, key=lambda r: r["palName"]):
+        if r["palName"] not in known:
+            continue
+        breeding.append('"{}":[{},{},{}]'.format(
+            js_str(r["palName"]),
+            int(r["breedingRank"] or 0),
+            int(r["combiDuplicatePriority"] or 0),
+            1 if r.get("isUniqueCombo") == "1" else 0,
+        ))
+    combo_rows = ['["{}","{}","{}"]'.format(*(js_str(x) for x in c))
+                  for c in sorted(set(combos))]
+
     # --- Bilan -----------------------------------------------------------
     print(f"\nWORK     : {len(existing)} -> {len(work)} / {len(names)} Pals")
     print(f"SKILLS   : {len(skills)} / {len(names)} Pals")
     print(f"ASKILLS  : {len(askills)} compétences au catalogue")
     print(f"PSKILLS  : {len(pskills)} passifs au catalogue "
           f"({len(innate)} liés à une espèce)")
+    print(f"BREED    : {len(breeding)} Pals reproductibles, "
+          f"{len(combo_rows)} combos uniques")
 
     no_fr_sk = sorted({r["activeSkillName"] for r in all_sk
                        if r["activeSkillName"] not in tr_sk})
@@ -372,6 +431,12 @@ def main():
                  out, count=1, flags=re.S)
     out = re.sub(r"const PSKILLS=\[.*?\n\];",
                  "const PSKILLS=[\n" + fmt_catalog(pskills) + "\n];",
+                 out, count=1, flags=re.S)
+    out = re.sub(r"const BREED=\{.*?\n\};",
+                 "const BREED={\n" + fmt_catalog(breeding) + "\n};",
+                 out, count=1, flags=re.S)
+    out = re.sub(r"const COMBOS=\[.*?\n\];",
+                 "const COMBOS=[\n" + fmt_catalog(combo_rows) + "\n];",
                  out, count=1, flags=re.S)
     if out == src:
         sys.exit("Aucune substitution effectuée — le format a changé ?")

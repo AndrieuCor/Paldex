@@ -358,6 +358,7 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
       <select id="job" aria-label="Filtrer par métier">
         <option value="">Tous les métiers</option>
       </select>
+      <select id="target" aria-label="Pal à obtenir"></select>
       <select id="role" aria-label="Filtrer par monture">
         <option value="">Toutes montures</option>
         <option value="fly">Volantes</option>
@@ -418,6 +419,17 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
       </tr>
     </thead>
     <tbody id="rows-passives"></tbody>
+  </table>
+
+  <table id="t-breed" hidden>
+    <thead>
+      <tr>
+        <th>Parent 1</th>
+        <th>Parent 2</th>
+        <th class="hide-s">Type</th>
+      </tr>
+    </thead>
+    <tbody id="rows-breed"></tbody>
   </table>
 
   <p class="empty" id="empty" hidden>Aucun résultat. Efface la recherche ou retire un filtre.</p>
@@ -1355,6 +1367,341 @@ const ASKILLS=[
    Le rang va de -3 (malus) à 4 (légendaire). La liste de Pals n'est remplie
    que pour la trentaine d'espèces au trait inné ; pour tous les autres, un
    passif s'obtient au hasard et ne dépend pas de l'espèce. */
+/* Reproduction. BREED : nom -> [rang, priorité de départage, issu d'un combo
+   unique]. Le jeu vise le rang moyen des deux parents et retient le Pal dont
+   le rang en est le plus proche ; les Pals issus d'un combo unique sont hors
+   de ce calcul, sinon ils sortiraient d'accouplements ordinaires.
+   Rempli par tools/fetch-data.py. */
+const BREED={
+"Amione":[2520,252000,0],
+"Anubis":[570,7770000,0],
+"Arsox":[790,6750000,0],
+"Astegon":[150,6720000,0],
+"Azurmane":[400,5970000,0],
+"Azurobe":[500,7320000,0],
+"Azurobe Cryst":[480,578,1],
+"Bakemi":[1540,154000,0],
+"Bastigor":[170,5340000,1],
+"Beakon":[220,6540000,0],
+"Beegarde":[1070,6790000,0],
+"Bellanoir":[1,6270000,1],
+"Bellanoir Libero":[1,6260000,1],
+"Blazamut":[10,7020000,0],
+"Blazamut Ryu":[9,7010000,1],
+"Blazehowl":[710,6660000,0],
+"Blazehowl Noct":[670,6650000,1],
+"Braloha":[335,33500,0],
+"Bristla":[1320,7560000,0],
+"Broncherry":[860,7050000,0],
+"Broncherry Aqua":[840,7040000,1],
+"Bulldosu":[1190,119000,0],
+"Bushi":[640,6410000,0],
+"Bushi Noct":[650,6400000,1],
+"Caprity":[930,7000000,0],
+"Caprity Noct":[855,5420000,1],
+"Carnibora":[1700,170000,0],
+"Cattiva":[1460,7310000,0],
+"Cawgnito":[1080,7330000,0],
+"Celaray":[870,6390000,0],
+"Celaray Lux":[830,574,1],
+"Celesdir":[815,6040000,1],
+"Chikipi":[1500,7140000,0],
+"Chillet":[800,6480000,0],
+"Chillet Ignis":[790,6470000,1],
+"Cinnamoth":[490,6350000,0],
+"Clovee":[2970,297000,0],
+"Cremis":[1455,6310000,0],
+"Croajiro":[795,6240000,0],
+"Croajiro Noct":[765,76500,1],
+"Cryolinx":[130,7370000,0],
+"Cryolinx Terra":[160,5370000,1],
+"Daedream":[1230,6680000,0],
+"Dazemu":[675,6140000,0],
+"Dazzi":[1210,7530000,0],
+"Dazzi Noct":[1115,5380000,1],
+"Depresso":[1380,7300000,0],
+"Digtoise":[850,7670000,0],
+"Dinossom":[820,7130000,0],
+"Dinossom Lux":[810,7120000,1],
+"Direhowl":[1060,7630000,0],
+"Dogen":[665,6150000,0],
+"Dualith":[510,51000,0],
+"Dumud":[895,6300000,0],
+"Dumud Gild":[855,576,1],
+"Eidrolon":[300,30000,0],
+"Eikthyrdeer":[920,7690000,0],
+"Eikthyrdeer Terra":[900,7680000,1],
+"Elgrove":[2020,202000,0],
+"Elizabee":[330,6800000,0],
+"Elphidran":[540,7400000,0],
+"Elphidran Aqua":[530,7390000,1],
+"Faleris":[370,7030000,1],
+"Faleris Aqua":[245,5350000,1],
+"Felbat":[1010,7060000,0],
+"Fenglope":[980,7290000,0],
+"Fenglope Lux":[835,5360000,1],
+"Finsider":[1295,129500,0],
+"Finsider Ignis":[1255,581,1],
+"Flambelle":[1405,6290000,0],
+"Flaracle":[390,39000,0],
+"Flopie":[1280,6830000,0],
+"Foxcicle":[760,6700000,0],
+"Foxparks":[1400,7570000,0],
+"Foxparks Cryst":[1305,5430000,1],
+"Frostallion":[120,7100000,1],
+"Frostallion Noct":[100,7090000,1],
+"Frostplume":[655,65500,0],
+"Fuack":[1330,7180000,0],
+"Fuack Ignis":[1290,575,1],
+"Fuddler":[1220,6730000,0],
+"Galeclaw":[1030,7660000,0],
+"Ghangler":[525,52500,0],
+"Ghangler Ignis":[505,50500,1],
+"Gildane":[505,7830000,0],
+"Gildra":[1170,117000,0],
+"Gloopie":[1195,119500,0],
+"Gobfin":[1090,7520000,0],
+"Gobfin Ignis":[1100,7510000,1],
+"Gorirat":[1040,7620000,0],
+"Gorirat Terra":[1030,7610000,1],
+"Grintale":[510,6360000,0],
+"Grizzbolt":[200,7650000,1],
+"Gumoss":[1240,6620000,0],
+"Hangyu":[1420,7460000,0],
+"Hangyu Cryst":[1422,7450000,1],
+"Hartalis":[20,2000,1],
+"Helzephyr":[190,6440000,0],
+"Helzephyr Lux":[180,6430000,1],
+"Herbil":[1445,144500,0],
+"Hoocrates":[1390,6920000,0],
+"Hoodle":[1770,177000,0],
+"Icelyn":[605,60500,0],
+"Incineram":[590,7760000,0],
+"Incineram Noct":[580,7750000,1],
+"Jelliette":[1385,5950000,0],
+"Jellroy":[1395,139500,0],
+"Jetragon":[90,6690000,1],
+"Jolthog":[1370,7600000,0],
+"Jolthog Cryst":[1360,7590000,1],
+"Jormuntide":[310,7490000,0],
+"Jormuntide Ignis":[315,7480000,1],
+"Katress":[700,6570000,0],
+"Katress Ignis":[690,6560000,1],
+"Kelpsea":[1260,6910000,0],
+"Kelpsea Ignis":[1270,6900000,0],
+"Kikit":[1125,6200000,0],
+"Killamari":[1290,6890000,0],
+"Killamari Primo":[1250,571,1],
+"Kingpaca":[470,6640000,0],
+"Kingpaca Cryst":[440,6630000,1],
+"Kitsun":[830,7210000,0],
+"Kitsun Noct":[735,5390000,1],
+"Knocklem":[265,6170000,0],
+"Lamball":[1470,7500000,0],
+"Lapiron":[1680,168000,0],
+"Lapure":[810,81000,0],
+"Leafan":[1410,141000,0],
+"Leezpunk":[1120,7200000,0],
+"Leezpunk Ignis":[1140,7190000,1],
+"Lifmunk":[1430,7710000,0],
+"Loupmoon":[950,7470000,0],
+"Loupmoon Cryst":[805,5400000,1],
+"Lovander":[940,6930000,0],
+"Lullu":[905,6230000,0],
+"Lunaris":[1110,7550000,0],
+"Lyleen":[250,6820000,1],
+"Lyleen Noct":[210,6810000,1],
+"Majex":[1010,101000,0],
+"Mammorest":[300,7080000,0],
+"Mammorest Cryst":[290,7070000,1],
+"Maraith":[1150,7260000,0],
+"Mau":[1480,7740000,0],
+"Mau Cryst":[1440,7730000,1],
+"Melpaca":[890,7360000,0],
+"Menasting":[260,6340000,0],
+"Menasting Terra":[250,6330000,1],
+"Mimog":[1200,6130000,1],
+"Moldron":[750,75000,0],
+"Mossanda":[430,6770000,0],
+"Mossanda Lux":[390,6760000,1],
+"Mozzarina":[910,6880000,0],
+"Muffly":[2480,248000,0],
+"Munchill":[1335,133500,0],
+"Necromus":[70,6380000,1],
+"Needoll":[2420,242000,0],
+"Neptilius":[90,9000,1],
+"Nitemary":[705,6080000,0],
+"Nitewing":[420,6840000,0],
+"Nox":[1180,6500000,0],
+"Nyafia":[645,9800000,0],
+"Omascul":[630,6030000,0],
+"Ophydia":[230,23000,0],
+"Orserk":[140,6320000,1],
+"Paladius":[80,6510000,1],
+"Palumba":[455,45500,0],
+"Panthalus":[20,2000,0],
+"Pengullet":[1350,7540000,0],
+"Pengullet Lux":[1310,572,1],
+"Penking":[520,6490000,0],
+"Penking Lux":[490,573,1],
+"Petallia":[780,6370000,0],
+"Pierdon":[1110,111000,0],
+"Polapup":[745,74500,0],
+"Prixter":[355,6180000,0],
+"Prunelia":[755,9790000,0],
+"Puffolt":[2360,236000,0],
+"Pupperai":[2930,293000,0],
+"Pyrin":[360,7420000,0],
+"Pyrin Noct":[240,7410000,1],
+"Quivern":[350,6460000,0],
+"Quivern Botan":[340,6450000,1],
+"Ragnahawk":[380,6420000,0],
+"Rayhound":[740,6740000,0],
+"Reindrix":[880,6990000,0],
+"Relaxaurus":[280,7230000,0],
+"Relaxaurus Lux":[270,7220000,1],
+"Reptyro":[320,7280000,0],
+"Reptyro Cryst":[230,7270000,1],
+"Ribbuny":[1310,6550000,0],
+"Ribbuny Botan":[1205,5410000,1],
+"Robinquill":[1020,7250000,0],
+"Robinquill Terra":[1000,7240000,1],
+"Rooby":[1155,6280000,0],
+"Rushoar":[1130,7720000,0],
+"Sekhmet":[870,0,0],
+"Selyne":[345,6250000,1],
+"Shadowbeak":[60,6980000,1],
+"Shroomer":[720,6220000,0],
+"Shroomer Noct":[730,6210000,0],
+"Sibelyx":[450,6970000,0],
+"Silvegis":[215,6060000,0],
+"Skutlass":[1420,0,0],
+"Slowatt":[1750,0,0],
+"Smokie":[1245,6050000,0],
+"Snock":[1780,178000,0],
+"Snugloo":[2390,0,0],
+"Solmora":[1370,137000,0],
+"Sootseer":[545,6190000,0],
+"Souffline":[2000,200000,0],
+"Sparkit":[1410,7110000,0],
+"Splatterina":[725,5990000,0],
+"Starryon":[365,6070000,0],
+"Surfent":[560,7350000,0],
+"Surfent Terra":[550,7340000,1],
+"Suzaku":[50,7440000,0],
+"Suzaku Aqua":[30,7430000,1],
+"Swee":[1300,6590000,0],
+"Sweepa":[410,6580000,0],
+"Tanzee":[1250,6670000,0],
+"Tanzee Ignis":[2830,283000,0],
+"Tarantriss":[825,5980000,0],
+"Teafant":[1490,7640000,0],
+"Tocotoco":[1340,7700000,0],
+"Tombat":[750,6780000,0],
+"Turtacle":[1105,7810000,0],
+"Turtacle Terra":[1065,577,1],
+"Univolt":[680,7580000,0],
+"Vaelet":[1050,6850000,0],
+"Valentail":[1900,190000,0],
+"Vanwyrm":[660,7160000,0],
+"Vanwyrm Cryst":[620,7150000,1],
+"Verdash":[990,6710000,0],
+"Vixy":[1450,6960000,0],
+"Warsect":[340,6530000,0],
+"Warsect Terra":[275,6520000,1],
+"Whalaska":[445,44500,0],
+"Whalaska Ignis":[430,43000,1],
+"Wispaw":[2250,225000,0],
+"Wixen":[1160,6950000,0],
+"Wixen Noct":[1150,6940000,1],
+"Woolipop":[1190,7380000,0],
+"Woolipop Terra":[2030,203000,0],
+"Wumpo":[460,6870000,0],
+"Wumpo Botan":[480,6860000,0],
+"Xenogard":[435,6110000,1],
+"Xenolord":[265,6090000,1],
+"Xenovader":[465,6120000,1],
+"Yakumo":[945,6160000,0]
+};
+
+/* Couples imposant un enfant précis, court-circuitant la moyenne.
+   [parent1, parent2, enfant] */
+const COMBOS=[
+["Azurobe","Frostplume","Azurobe Cryst"],
+["Bellanoir","Bellanoir","Bellanoir"],
+["Bellanoir Libero","Bellanoir Libero","Bellanoir Libero"],
+["Blazamut Ryu","Blazamut Ryu","Blazamut Ryu"],
+["Blazehowl","Felbat","Blazehowl Noct"],
+["Broncherry","Fuack","Broncherry Aqua"],
+["Bushi","Sootseer","Bushi Noct"],
+["Caprity","Tarantriss","Caprity Noct"],
+["Celaray","Univolt","Celaray Lux"],
+["Chillet","Arsox","Chillet Ignis"],
+["Croajiro","Bushi Noct","Croajiro Noct"],
+["Cryolinx","Dazemu","Cryolinx Terra"],
+["Dazzi","Omascul","Dazzi Noct"],
+["Dinossom","Rayhound","Dinossom Lux"],
+["Dumud","Eikthyrdeer Terra","Dumud Gild"],
+["Eikthyrdeer","Hangyu","Eikthyrdeer Terra"],
+["Elphidran","Surfent","Elphidran Aqua"],
+["Faleris","Jormuntide","Faleris Aqua"],
+["Fenglope","Azurmane","Fenglope Lux"],
+["Finsider","Gobfin Ignis","Finsider Ignis"],
+["Foxparks","Foxcicle","Foxparks Cryst"],
+["Frostallion","Anubis","Bastigor"],
+["Frostallion","Frostallion","Frostallion"],
+["Frostallion","Helzephyr","Frostallion Noct"],
+["Fuack","Flambelle","Fuack Ignis"],
+["Ghangler","Sootseer","Ghangler Ignis"],
+["Gildane","Eikthyrdeer Terra","Celesdir"],
+["Gobfin","Rooby","Gobfin Ignis"],
+["Gorirat","Kikit","Gorirat Terra"],
+["Grizzbolt","Relaxaurus","Orserk"],
+["Hangyu","Swee","Hangyu Cryst"],
+["Hartalis","Hartalis","Hartalis"],
+["Helzephyr","Beakon","Helzephyr Lux"],
+["Incineram","Maraith","Incineram Noct"],
+["Jetragon","Jetragon","Jetragon"],
+["Jolthog","Pengullet","Jolthog Cryst"],
+["Jormuntide","Blazehowl","Jormuntide Ignis"],
+["Killamari","Ribbuny","Killamari Primo"],
+["Kingpaca","Reindrix","Kingpaca Cryst"],
+["Kitsun","Astegon","Shadowbeak"],
+["Kitsun","Nyafia","Kitsun Noct"],
+["Leezpunk","Flambelle","Leezpunk Ignis"],
+["Loupmoon","Sweepa","Loupmoon Cryst"],
+["Lyleen","Menasting","Lyleen Noct"],
+["Mammorest","Wumpo","Mammorest Cryst"],
+["Mau","Pengullet","Mau Cryst"],
+["Menasting","Knocklem","Menasting Terra"],
+["Mimog","Mimog","Mimog"],
+["Mossanda","Grizzbolt","Mossanda Lux"],
+["Mossanda","Petallia","Lyleen"],
+["Necromus","Necromus","Necromus"],
+["Neptilius","Neptilius","Neptilius"],
+["Paladius","Lunaris","Selyne"],
+["Paladius","Paladius","Paladius"],
+["Pengullet","Sparkit","Pengullet Lux"],
+["Penking","Rayhound","Penking Lux"],
+["Pyrin","Katress","Pyrin Noct"],
+["Quivern","Lullu","Quivern Botan"],
+["Rayhound","Mossanda","Grizzbolt"],
+["Relaxaurus","Sparkit","Relaxaurus Lux"],
+["Reptyro","Foxcicle","Reptyro Cryst"],
+["Ribbuny","Bristla","Ribbuny Botan"],
+["Robinquill","Fuddler","Robinquill Terra"],
+["Surfent","Dumud","Surfent Terra"],
+["Suzaku","Jormuntide","Suzaku Aqua"],
+["Turtacle","Digtoise","Turtacle Terra"],
+["Vanwyrm","Anubis","Faleris"],
+["Vanwyrm","Foxcicle","Vanwyrm Cryst"],
+["Warsect","Digtoise","Warsect Terra"],
+["Whalaska","Chillet Ignis","Whalaska Ignis"],
+["Xenogard","Xenogard","Xenogard"],
+["Xenolord","Xenolord","Xenolord"],
+["Xenovader","Xenovader","Xenovader"]
+];
+
 const PSKILLS=[
 ["Anormal",1,"Les dégâts Non Élémentaires sont réduits de 10.0 %.",["Lovander"],"Abnormal"],
 ["Coursier Marin",3,"La vitesse de déplacement augmente de 40% sur l'eau.",[],"Ace Swimmer"],
@@ -1481,7 +1828,8 @@ const MAXT=Math.max(...D.map(x=>x.t)), MAX1=200;
    au lieu de « nous n'en savons rien ». */
 const JOBS_SOURCED=new Set(JOBS.map(([k])=>k).filter(k=>D.some(p=>p.w&&p.w[k])));
 const state={
-  view:"pals",                 // pals | skills | passives
+  view:"pals",                 // pals | skills | passives | breed
+  target:"",                   // Pal visé dans la vue Reproduction
   q:"",els:new Set(),role:"",job:"",sort:"i",dir:-1,
   sortS:"n",dirS:1,            // tri du catalogue de compétences
   sortP:"r",dirP:-1,           // tri du catalogue de passifs
@@ -1496,6 +1844,11 @@ const VIEWS={
             table:"t-skills",  ctl:[],                   chips:true},
   passives:{label:"Passifs",      n:()=>PSKILLS.length, ph:"Chercher un passif…",
             table:"t-passives",ctl:[],                   chips:false},
+  /* Le compte annonce les Pals qu'on peut viser, pas les 73 combos uniques :
+     c'est ce que la vue permet de chercher. */
+  breed:   {label:"Reproduction", n:()=>Object.keys(BREED).length,
+            ph:"Filtrer les parents…",
+            table:"t-breed",   ctl:["target"],           chips:false},
 };
 
 /* Remplissage du sélecteur de métiers */
@@ -1565,7 +1918,7 @@ function syncViews(){
   });
   Object.values(VIEWS).forEach(v=>
     document.getElementById(v.table).hidden = v.table!==cfg.table);
-  ["sort","job","role"].forEach(id=>
+  ["sort","job","role","target"].forEach(id=>
     document.getElementById(id).hidden = !cfg.ctl.includes(id));
   chips.hidden=!cfg.chips;
   const q=document.getElementById("q");
@@ -1573,6 +1926,16 @@ function syncViews(){
   q.setAttribute("aria-label",cfg.ph.replace("…",""));
   if(state.view!=="pals") document.getElementById("gap").hidden=true;
 }
+
+/* Cibles de reproduction : dans l'ordre du Paldeck, plus parlant qu'un
+   ordre alphabétique quand on cherche un Pal qu'on vient de croiser. */
+const targetSel=document.getElementById("target");
+D.filter(p=>BREED[p.n]).forEach(p=>{
+  targetSel.appendChild(Object.assign(document.createElement("option"),
+    {value:p.n, textContent:p.n}));
+});
+state.target=targetSel.value;
+targetSel.onchange=e=>{state.target=e.target.value; render()};
 
 const chips=document.getElementById("chips");
 Object.keys(EL).forEach(k=>{
@@ -1743,13 +2106,89 @@ function renderPassives(){
     </tr>`).join("");
 }
 
+/* ---------- Vue Reproduction ----------
+   Le sens « quels parents donnent X ? » plutôt que « que donne A + B ? » :
+   c'est la question que se pose un joueur devant sa ferme. Le calcul balaie
+   les ~15 000 couples possibles, assez rapide pour être refait à chaque
+   changement de cible sans mise en cache. */
+function renderBreed(){
+  const q=state.q.trim().toLowerCase();
+  const target=state.target || BREEDABLE[0][0];
+  let list=parentsFor(target);
+  if(q) list=list.filter(([a,b])=>
+    a.toLowerCase().includes(q)||b.toLowerCase().includes(q));
+  document.getElementById("count").textContent=
+    `${list.length} couple${list.length>1?"s":""} donnent ${target}`;
+  document.getElementById("empty").hidden=list.length>0;
+  const gap=document.getElementById("gap");
+  gap.hidden=false;
+  gap.textContent=`Règle de départage entre Pals de même rang déduite des `
+    +`données, non vérifiée en jeu — les couples rares peuvent différer.`;
+  document.getElementById("rows-breed").innerHTML=list.map(([a,b,uniq])=>`
+    <tr>
+      <td><span class="cell-pal">${avatarOf(a)}<span class="pname">${a}</span></span></td>
+      <td><span class="cell-pal">${avatarOf(b)}<span class="pname">${b}</span></span></td>
+      <td class="hide-s">${uniq?'<span class="tagline">combo unique</span>':"—"}</td>
+    </tr>`).join("");
+}
+function avatarOf(name){
+  const p=D.find(x=>x.n===name);
+  return p?avatar(p):"";
+}
+
 let skillRows=[], passiveRows=[];
+
+/* ---------- Reproduction ----------
+   Le jeu vise floor((rangA + rangB) / 2) puis retient le Pal dont le rang
+   en est le plus proche. Deux réserves, signalées dans l'interface :
+   le module du wiki n'accepte qu'une correspondance exacte et rend
+   « Unknown » sinon, ce que le jeu ne fait pas ; et la règle de départage
+   entre Pals de même rang est déduite de combiDuplicatePriority, non
+   vérifiée en jeu. */
+const BREEDABLE=Object.entries(BREED).filter(([,v])=>!v[2]);
+const COMBO_MAP=new Map();
+COMBOS.forEach(([a,b,c])=>{
+  COMBO_MAP.set(a+" "+b,c);
+  COMBO_MAP.set(b+" "+a,c);
+});
+
+function breedChild(a,b){
+  const uniq=COMBO_MAP.get(a+" "+b);
+  if(uniq) return {child:uniq, unique:true};
+  const A=BREED[a], B=BREED[b];
+  if(!A||!B) return null;
+  const target=A[0]===B[0] ? A[0] : Math.floor((A[0]+B[0])/2);
+  let best=null;
+  for(const [n,v] of BREEDABLE){
+    const d=Math.abs(v[0]-target);
+    /* À égalité de distance, la priorité la plus forte l'emporte : les Pals
+       du jeu de base y sont mieux classés que les ajouts récents. */
+    if(!best || d<best.d || (d===best.d && v[1]>best.prio))
+      best={n, d, prio:v[1]};
+  }
+  return best && {child:best.n, unique:false, exact:best.d===0, target};
+}
+
+/* Tous les couples donnant un Pal donné. C'est le sens que les joueurs
+   interrogent le plus : « comment j'obtiens celui-là ? » */
+function parentsFor(name){
+  const out=[];
+  COMBOS.forEach(([a,b,c])=>{ if(c===name) out.push([a,b,true]); });
+  const names=BREEDABLE.map(([n])=>n);
+  for(let i=0;i<names.length;i++)
+    for(let j=i;j<names.length;j++){
+      const r=breedChild(names[i],names[j]);
+      if(r && !r.unique && r.child===name) out.push([names[i],names[j],false]);
+    }
+  return out;
+}
 
 function render(){
   clearTimeout(searchTimer); // désamorce un rendu différé encore en attente
   syncViews();
   if(state.view==="skills")   return renderSkills();
   if(state.view==="passives") return renderPassives();
+  if(state.view==="breed")    return renderBreed();
   const {list,unknown}=filtered();
   document.getElementById("count").textContent=`${list.length} / ${D.length} Pals`;
   const gap=document.getElementById("gap");
