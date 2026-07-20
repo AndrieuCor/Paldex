@@ -85,6 +85,30 @@ th.sortable:focus-visible{
 .chip:hover{color:var(--bone);border-color:#3B4C57}
 .chip[aria-pressed=true]{background:var(--c,#333);border-color:transparent;color:#0E1418;font-weight:600}
 .count{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);margin-left:auto}
+
+/* ---------- Sélecteur de catalogue ---------- */
+.views{display:flex;gap:2px;margin-bottom:12px;flex-wrap:wrap}
+.views button{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.08em;
+  text-transform:uppercase;background:transparent;color:var(--muted);
+  border:1px solid transparent;border-bottom:2px solid transparent;
+  padding:7px 14px;cursor:pointer;transition:.14s;
+}
+.views button:hover{color:var(--bone)}
+.views button[aria-selected=true]{color:var(--brass);border-bottom-color:var(--brass)}
+.views button b{font-weight:400;opacity:.55;margin-left:6px}
+
+/* Descriptions : le texte doit respirer sans faire exploser la colonne. */
+.desc{color:var(--muted);font-size:13px;max-width:46ch}
+.rank{font-family:"IBM Plex Mono",monospace;font-size:11px;padding:2px 7px;border-radius:99px;border:1px solid var(--line)}
+.rank[data-r="4"]{color:var(--brass);border-color:var(--brass)}
+.rank[data-r="3"]{color:#7FC26B}
+.rank[data-r="-1"],.rank[data-r="-2"],.rank[data-r="-3"]{color:#D2685F}
+.users{font-size:12.5px;color:var(--muted);max-width:38ch}
+.users b{color:var(--bone);font-weight:500}
+.tagline{font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted);border:1px solid var(--line);
+  border-radius:99px;padding:1px 7px;margin-left:7px}
 /* Avertit que le filtre métier ne peut pas se prononcer sur certains Pals. */
 .gap{
   font-family:"IBM Plex Mono",monospace;font-size:11.5px;color:var(--brass);
@@ -312,8 +336,9 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
 
 <div class="controls">
   <div class="wrap">
+    <div class="views" id="views" role="tablist" aria-label="Catalogues"></div>
     <div class="ctl-row">
-      <input type="search" id="q" placeholder="Chercher un Pal…" aria-label="Chercher un Pal">
+      <input type="search" id="q" placeholder="Chercher un Pal…" aria-label="Chercher">
       <select id="sort" aria-label="Trier par">
         <option value="i">Ordre du Paldeck</option>
         <option value="t">Total des stats</option>
@@ -346,7 +371,7 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
 </div>
 
 <main class="wrap">
-  <table>
+  <table id="t-pals">
     <thead>
       <tr>
         <th class="idx">Nº</th>
@@ -364,7 +389,34 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
     </thead>
     <tbody id="rows"></tbody>
   </table>
-  <p class="empty" id="empty" hidden>Aucun Pal ne correspond. Efface la recherche ou retire un filtre.</p>
+
+  <table id="t-skills" hidden>
+    <thead>
+      <tr>
+        <th class="sk-sortable" data-k="n">Compétence<span class="car">▾</span></th>
+        <th class="hide-s">Élément</th>
+        <th class="num sk-sortable" data-k="p">Puis.<span class="car">▾</span></th>
+        <th class="num sk-sortable" data-k="c">Rech.<span class="car">▾</span></th>
+        <th class="num hide-s sk-sortable" data-k="u">Pals<span class="car">▾</span></th>
+        <th class="hide-s">Description</th>
+      </tr>
+    </thead>
+    <tbody id="rows-skills"></tbody>
+  </table>
+
+  <table id="t-passives" hidden>
+    <thead>
+      <tr>
+        <th class="ps-sortable" data-k="n">Passif<span class="car">▾</span></th>
+        <th class="num ps-sortable" data-k="r">Rang<span class="car">▾</span></th>
+        <th>Effet</th>
+        <th class="hide-s">Inné chez</th>
+      </tr>
+    </thead>
+    <tbody id="rows-passives"></tbody>
+  </table>
+
+  <p class="empty" id="empty" hidden>Aucun résultat. Efface la recherche ou retire un filtre.</p>
 
   <details class="importer">
     <summary>Compléter les données manquantes</summary>
@@ -1001,6 +1053,398 @@ const SKILLS={
 "Panthalus":[["Bubble Rain","Eau",200,12,1],["Creeping Bubbles","Eau",200,12,7],["Aqua Blade","Eau",300,16,15],["Tidal Charge","Eau",400,20,22],["Maelstrom","Eau",500,24,30],["Grand Breach","Eau",700,30,40],["Holy Burst","Neutre",700,30,50],["Aqua Tornado","Eau",800,40,60]]
 };
 
+/* Catalogue des compétences actives, indépendant des Pals qui les portent.
+   [nom, élément, puissance, recharge, fruitDeCompétence, compétenceDeBoss,
+    description, [Pals qui l'apprennent]]
+   Rempli par tools/fetch-data.py. */
+const ASKILLS=[
+["Absolute Frost","Glace",140,50,1,1,"Throws icicles in a wide area from under the enemy's feet.",["Paladius"]],
+["Acid Rain","Eau",80,18,1,0,"Creates acidic clouds that pour down acid rain on enemies.",["Beegarde","Croajiro","Croajiro Noct","Dazzi","Dazzi Noct","Elphidran Aqua","Faleris Aqua","Fenglope","Fenglope Lux","Killamari","Killamari Primo","Lovander","Quivern","Teafant"]],
+["Aegis Charge","Dragon",170,50,0,0,"Silvegis's exclusive skill. Deploys a shield in front that reduces all types of attacks, then charges forward, crushing the enemy.",["Silvegis"]],
+["Air Blade","Neutre",160,8,1,0,"Sends out sharp blades of air in a fan shape.",["Celesdir","Clovee","Dogen","Herbil","Lapure","Mimog","Muffly","Sekhmet","Selyne","Valentail","Xenogard","Yakumo"]],
+["Air Cannon","Neutre",40,2,1,0,"Quickly fires a burst of highly pressurized air.",["Beakon","Beegarde","Caprity","Cattiva","Cawgnito","Chikipi","Cinnamoth","Clovee","Cremis","Dazzi","Dazzi Noct","Direhowl","Dogen","Elizabee","Fenglope","Flopie","Foxcicle","Frostallion","Frostallion Noct","Galeclaw","Hangyu","Hangyu Cryst","Hoocrates","Killamari Primo","Lamball","Lifmunk","Lunaris","Mau Cryst","Melpaca","Mozzarina","Muffly","Nitewing","Nox","Ragnahawk","Reindrix","Ribbuny","Shadowbeak","Suzaku","Swee","Tocotoco","Tombat","Valentail","Vanwyrm","Vanwyrm Cryst","Vixy","Woolipop"]],
+["All Range Thunder","Electrique",500,24,1,1,"Generates lightning strikes that travel in a straight line in all directions.",["Azurmane","Puffolt","Slowatt","Snock"]],
+["Antler Uppercut","Neutre",50,5,0,0,"Eikthyrdeer's exclusive skill. Charges at foes and uses antlers to launch them into the air. If used while riding, the direction of the charge can be controlled.",["Eikthyrdeer","Eikthyrdeer Terra"]],
+["Apocalypse","Tenebres",400,20,1,0,"Generates several dark vortexes in the surrounding area.",["Bakemi","Bellanoir","Bellanoir Libero","Bushi Noct","Dazzi Noct","Hoodle","Necromus","Starryon","Tarantriss","Wispaw","Wixen Noct"]],
+["Aqua Blade","Eau",300,16,0,0,"Panthalus's exlusive skill. Launches sharp water blades at enemies.",["Panthalus"]],
+["Aqua Burst","Eau",100,30,1,0,"Creates a giant ball of water and hurls it at an enemy.",["Broncherry Aqua","Celaray","Croajiro","Digtoise","Dumud","Fenglope","Fuack","Gobfin","Jelliette","Jormuntide","Kelpsea","Kingpaca Cryst","Lyleen","Pengullet Lux","Penking","Quivern","Relaxaurus","Sibelyx","Suzaku Aqua","Teafant","Turtacle","Turtacle Terra","Wumpo Botan"]],
+["Aqua Burst","Eau",200,12,1,0,"Creates a giant ball of water and hurls it at an enemy.",["Broncherry Aqua","Celaray","Croajiro","Digtoise","Dumud","Fenglope","Fuack","Gobfin","Jelliette","Jormuntide","Kelpsea","Kingpaca Cryst","Lyleen","Pengullet Lux","Penking","Quivern","Relaxaurus","Sibelyx","Suzaku Aqua","Teafant","Turtacle","Turtacle Terra","Wumpo Botan"]],
+["Aqua Gun","Eau",50,2,1,0,"Hurls a ball of water straight at an enemy.",["Azurobe","Broncherry Aqua","Celaray","Croajiro","Digtoise","Dumud","Dumud Gild","Elphidran Aqua","Fenglope","Finsider","Fuack","Gobfin","Jelliette","Jormuntide","Kelpsea","Munchill","Neptilius","Pengullet","Penking","Petallia","Polapup","Relaxaurus","Surfent","Suzaku Aqua","Teafant","Wumpo Botan"]],
+["Aqua Surge","Eau",500,24,1,0,"Generates waves that surge around the enemy from all sides. They converge and explode at the center, erupting into a column of water.",["Amione","Jelliette","Neptilius","Penking Lux","Polapup","Skutlass","Solmora"]],
+["Aqua Tornado","Eau",800,40,0,0,"Panthalus's exclusive skill. Soars into the sky and generates multiple massive tornadoes that slowly track enemies.",["Panthalus"]],
+["Astral Ray","Tenebres",170,45,0,0,"Xenolord's exclusive skill. Concentrates energy filled with darkness and releases it all at once in a straight line.",["Xenolord"]],
+["Beam Comet","Dragon",140,50,0,0,"Jetragon's exclusive skill. Flies at enemies on illuminated wings while firing innumerable beams. The beams explode on impact.",["Jetragon"]],
+["Beam Slash","Dragon",120,28,0,0,"Xenolord's exclusive skill. Generates a high-output beam sword with the right hand and delivers two powerful slashes while moving at high speed.",["Xenolord"]],
+["Beam Slicer","Dragon",350,16,1,0,"Mows down the frontal area with a beam imbued with dragon power. The area touched by the beam will also explode after a few moments.",["Blazamut Ryu","Eidrolon","Jetragon","Xenogard"]],
+["Beckon Lightning","Electrique",65,9,0,0,"Rayhound's exclusive skill. Summons lightning one after another in front, then charges forward at high speed through the gaps between the falling bolts.",["Rayhound"]],
+["Bee Quiet","Herbe",250,55,0,0,"Risks its life to cause a violent explosion, but receives the honor of falling in battle.",["Beegarde"]],
+["Blast Cannon","Dragon",100,30,1,0,"Fires an energy bullet imbued with dragon power at the enemy's location. Upon impact, the bullet shatters and creates a frontal long-range explosion.",["Silvegis"]],
+["Blast Punch","Electrique",85,14,0,0,"Mossanda Lux's exclusive skill. Winds up its fist before pummeling an enemy with a flurry of electrically charged punches.",["Mossanda Lux"]],
+["Blazing Beam","Dragon",700,30,0,0,"Eidrolon's exclusive skill. Emits a superheated light beam for a short time. At the final moment, the targeted area is engulfed in a massive explosion.",["Eidrolon"]],
+["Blazing Horn","Feu",50,9,0,0,"Arsox's exclusive skill. Takes aim and rushes at an enemy with a mad dash.",["Arsox"]],
+["Blizzard Claw","Glace",85,14,0,0,"Cryolinx's exclusive skill. First, it strikes with its claws, followed by a second slash, and culminates with a powerful slash using its entire body. When swinging the claws, ice pillars are launched forward in a fan shape.",["Cryolinx"]],
+["Blizzard Spike","Glace",450,20,1,0,"Creates a giant lump of ice and hurls it at an enemy. It deals damage to those in the surrounding area upon impact.",["Cryolinx","Fenglope","Foxcicle","Foxparks Cryst","Frostallion","Hangyu Cryst","Icelyn","Jolthog Cryst","Kingpaca Cryst","Loupmoon Cryst","Lunaris","Lyleen Noct","Mammorest Cryst","Mau Cryst","Muffly","Paladius","Pengullet","Penking","Reindrix","Reptyro Cryst","Ribbuny","Sibelyx","Snugloo","Suzaku Aqua","Swee","Sweepa","Vanwyrm Cryst","Wispaw","Wumpo"]],
+["Bog Blast","Terre",40,2,1,0,"Hurls sticky mud at an enemy.",["Braloha","Broncherry","Bulldosu","Caprity","Cattiva","Cremis","Dazemu","Depresso","Direhowl","Dualith","Dumud","Dumud Gild","Elgrove","Foxparks","Fuddler","Galeclaw","Gildane","Gorirat","Gorirat Terra","Grintale","Gumoss","Hangyu","Kikit","Kingpaca","Lapiron","Mammorest","Mau","Mau Cryst","Melpaca","Menasting","Menasting Terra","Mozzarina","Pierdon","Pyrin","Rayhound","Ribbuny Botan","Robinquill Terra","Rushoar","Sekhmet","Smokie","Sparkit","Starryon","Surfent Terra","Tanzee","Teafant","Turtacle Terra","Valentail","Vixy","Warsect Terra","Woolipop","Woolipop Terra","Yakumo"]],
+["Bolt Blink","Electrique",200,45,0,0,"Azurmane's exclusive skill. Moves with the speed of lightning, engulfing everything in its path.",["Azurmane"]],
+["Botanical Smash","Herbe",60,8,0,0,"Dinossom's exclusive skill. Uses large tail to smash the ground in front of it, damaging enemies over a wide area.",["Dinossom","Dinossom Lux"]],
+["Bountiful Protection","Neutre",0,240,0,0,"Lyleen's exclusive skill. Uses her healing power to recover her health. Doesn't heal anyone else.",["Lyleen"]],
+["Brawn Impact","Feu",150,38,0,0,"Blazamut's exclusive skill. Waves and pumps up its arms, the slams them together to create a large explosion in the surrounding area.",["Blazamut","Blazamut Ryu"]],
+["Bubble Blast","Eau",80,4,1,0,"Fires numerous bubbles that slowly pursue an enemy.",["Amione","Azurobe","Broncherry Aqua","Celaray","Celaray Lux","Croajiro","Dumud","Faleris Aqua","Finsider","Flopie","Fuack","Fuack Ignis","Gobfin","Jelliette","Jellroy","Kelpsea","Killamari Primo","Lapure","Neptilius","Ophydia","Pengullet Lux","Penking Lux","Petallia","Relaxaurus","Skutlass","Solmora","Surfent","Teafant","Turtacle","Turtacle Terra","Woolipop"]],
+["Bubble Rain","Eau",200,12,0,0,"Panthalus's exclusive skill. Fires a large cluster of homing bubbles that remain in place upon landing. Bubbles burst and deal damage upon contact or after several seconds.",["Panthalus"]],
+["Bull Rush","Herbe",250,12,0,0,"Elgrove's exclusive skill. Enters a wild frenzy and unleashes two consecutive Grass-element charge attacks.",["Elgrove"]],
+["Cat Press","Neutre",60,9,0,0,"Grintale's exclusive skill. Grins menacingly before leaping into the air and smashing foes with its body.",["Grintale"]],
+["Chaotic Spray","Glace",95,17,0,0,"Munchill's exclusive skill. Coughs up three cold grenades kept undigested inside its body and lobs them at enemies. May occasionally spit out something more dangerous...?",["Munchill"]],
+["Charge Cannon","Dragon",140,50,1,0,"Fires an energy orb infused with draconic power at the enemy. The orb causes a wide-area explosion upon impact.",["Azurobe Cryst","Silvegis"]],
+["Chicken Rush","Neutre",30,2,0,0,"Chikipi's exclusive skill. Flies at enemies in its sight, attacking them with its sharp beak.",["Chikipi"]],
+["Circle Vine","Herbe",300,16,1,0,"Sprouts sharp roots in and around the enemy's location.",["Caprity Noct","Carnibora","Elgrove","Lullu","Needoll","Ophydia","Quivern Botan","Ribbuny Botan","Shroomer","Shroomer Noct"]],
+["Cloud Tempest","Neutre",90,15,0,0,"Fenglope's exclusive skill. Charges forward while manipulating the atmosphere to create a pressurized wind tunnel around itself.",["Fenglope"]],
+["Comet Barrage","Dragon",450,20,0,0,"Drops meteorites one after another, generating shock waves around the impact areas.",["Eidrolon"]],
+["Comet Strike","Dragon",110,35,1,0,"Drops a meteorite straight down, generating a shock wave around the impact area.",["Blazamut Ryu","Celesdir","Quivern Botan","Smokie","Xenogard"]],
+["Cosmic Meteor","Dragon",180,50,0,0,"Xenolord's exclusive skill. Soars into the air at the speed of light and releases countless meteor projectiles. Afterwards, transforms into a comet and charges forward, causing a massive explosion upon impact.",["Xenolord"]],
+["Crash Dash","Terre",120,28,0,0,"Gildane's exclusive skill. Charges forward, hurling rocks to the left and right with great force.",["Gildane"]],
+["Creeping Bubbles","Eau",200,12,0,0,"Panthalus's exclusive skill. Generates a multitude of bubbles around the enemy to surround and attack them.",["Panthalus"]],
+["Cross Lightning","Electrique",1,7,0,0,"Generates two lightning bolts that advance left and right, blocking either direction.",[]],
+["Crosswind","Herbe",500,24,1,0,"Conjures blades of wind in front of the enemy, converging to deliver a cutting cross attack.",["Carnibora","Clovee","Elgrove","Herbil","Leafan","Needoll","Palumba","Souffline"]],
+["Crushing Punch","Herbe",85,18,0,0,"Mossanda's exclusive skill. Winds up its fist before striking an enemy with a devastating punch.",["Mossanda"]],
+["Crystal Breath","Glace",160,8,1,0,"Enshrouds an enemy in a frigid blast of air, dealing continuous damage.",["Azurobe Cryst","Bastigor","Chillet","Cryolinx","Daedream","Foxcicle","Foxparks Cryst","Frostallion","Frostplume","Hangyu Cryst","Icelyn","Jolthog Cryst","Kingpaca Cryst","Lyleen Noct","Mammorest Cryst","Mau Cryst","Muffly","Munchill","Penking","Reindrix","Reptyro Cryst","Sibelyx","Snugloo","Suzaku Aqua","Swee","Sweepa","Vanwyrm Cryst","Wumpo"]],
+["Crystal Wing","Glace",110,24,0,0,"Frostallion's exclusive skill. Dashes forward while creating frigid air around its wings, using them to slash enemies.",["Frostallion","Frostallion Noct"]],
+["Cube Press","Terre",600,30,0,0,"Tetroise's exclusive skill. Leaps into the air and crushes enemies with its massive weight.",[]],
+["Curtain Splash","Eau",300,16,1,0,"Continously creates walls made from water columns at the enemy's location.",["Croajiro","Faleris Aqua","Finsider","Jelliette","Lapure","Neptilius","Solmora"]],
+["Daring Flames","Feu",75,10,0,0,"Kitsun's exclusive skill. Charges forward with great speed while clad in intense blue flames.",["Kitsun"]],
+["Daring Shadowstorm","Tenebres",75,10,0,0,"Kitsun Noct's exclusive skill. Charges forward with great speed while enveloped in intense purple flames.",["Kitsun Noct"]],
+["Dark Arrow","Tenebres",120,8,1,0,"Fires off dark energy that homes in on an enemy.",["Bellanoir","Bellanoir Libero","Bushi Noct","Croajiro Noct","Dazzi Noct","Helzephyr Lux","Majex","Nitemary","Selyne","Tarantriss","Wixen Noct","Xenovader"]],
+["Dark Ball","Tenebres",50,2,0,0,"Unleashes a sphere of darkness that slowly tracks down the enemy.",["Bakemi","Cawgnito","Daedream","Depresso","Felbat","Frostallion Noct","Gildra","Helzephyr","Hoocrates","Hoodle","Katress","Killamari","Leezpunk","Loupmoon","Lyleen Noct","Maraith","Mau","Nitemary","Nox","Omascul","Shadowbeak","Sootseer","Splatterina","Starryon","Tombat","Wispaw"]],
+["Dark Cannon","Tenebres",70,4,1,0,"Hurls an energy ball imbued with dark energy at an enemy.",["Bellanoir","Bellanoir Libero","Bushi Noct","Hoodle","Katress Ignis","Kitsun Noct","Mimog","Nitemary","Omascul","Prixter","Selyne","Smokie","Splatterina","Wixen Noct"]],
+["Dark Charge","Tenebres",85,14,0,0,"Pyrin Noct's exclusive skill. Charges forward while clad in a veil of dark flames. Flames continue to burn in its trajectory.",["Pyrin Noct"]],
+["Dark Laser","Tenebres",450,20,1,0,"Charges dark energy before blasting enemies with a powerful beam.",["Astegon","Bakemi","Blazehowl Noct","Caprity Noct","Cawgnito","Croajiro Noct","Daedream","Depresso","Felbat","Flaracle","Frostallion Noct","Helzephyr","Hoocrates","Hoodle","Katress","Killamari","Leezpunk","Loupmoon","Lyleen Noct","Majex","Maraith","Mau","Menasting","Necromus","Nox","Nyafia","Omascul","Prixter","Pyrin Noct","Shadowbeak","Shroomer Noct","Smokie","Tombat","Vanwyrm","Vanwyrm Cryst","Wispaw","Xenovader"]],
+["Dark Shot","Tenebres",40,2,1,0,"Fires a dark energy projectile that accelerates over time.",["Croajiro Noct","Majex"]],
+["Dark Whisp","Tenebres",600,30,1,1,"Fires a menacing ball of dark energy that pursues enemies.",["Bakemi","Frostallion Noct","Gildra","Hoodle","Jellroy","Kitsun Noct","Majex","Nitemary","Splatterina","Wispaw"]],
+["Dash Kick","Herbe",125,28,0,0,"Palumba's exclusive skill. Dashes to build up speed, then launches a devastating airborne kick at its target.",["Palumba"]],
+["Deep Breath","Herbe",135,30,0,0,"Braloha's exclusive skill. From the base of its long neck to the tip of its snout, it gradually spreads the breath of grass element.",["Braloha"]],
+["Diamond Rain","Glace",600,30,1,0,"Creates numerous lumps of ice that are consecutively dropped on a foe's head.",["Azurobe Cryst","Bastigor","Frostplume","Icelyn","Muffly","Munchill","Snugloo"]],
+["Divine Disaster","Tenebres",160,45,0,0,"Shadowbeak's exclusive skill. Charges forward while generating orbs of light that automatically capture enemies. The orbs automatically capture enemies, before releasing a barrage of lasers.",["Shadowbeak"]],
+["Divine Disaster II","Tenebres",170,45,0,0,"Shadowbeak's exclusive skill. As it charges forward, emits countless blue rays that automatically locate and pursue the enemy.",["Shadowbeak"]],
+["Divine Wing","Neutre",140,35,0,0,"Hartalis' exclusive skill. Leaps back and sprouts wings of light, then dives toward the enemy.",["Hartalis"]],
+["Double Blizzard Spike","Glace",200,60,0,1,"Creates two huge ice blocks and fires them at the enemy one after another. On impact, it also shocks those close by.",["Frostallion","Frostallion Noct"]],
+["Double Fang (Electric)","Electrique",40,2,0,0,"Bites rapidly in succession to attack enemies.",["Puffolt"]],
+["Double Fang (Ground)","Terre",40,2,0,0,"Bites rapidly in succession to attack enemies.",["Pupperai"]],
+["Draconic Breath","Dragon",70,15,1,0,"Exhales breath imbued with draconic energy, dealing continuous damage to those in front of it.",["Astegon","Azurobe","Azurobe Cryst","Chillet","Dinossom","Dinossom Lux","Elphidran","Jetragon","Jormuntide","Orserk","Quivern","Quivern Botan","Relaxaurus","Relaxaurus Lux","Silvegis","Surfent","Surfent Terra","Xenogard"]],
+["Dragon Breath","Dragon",160,8,1,0,"Exhales breath imbued with draconic energy, dealing continuous damage to those in front of it.",["Eidrolon"]],
+["Dragon Burst","Dragon",80,4,1,0,"Quickly discharges draconic energy, damaging those around it.",["Astegon","Azurobe","Azurobe Cryst","Blazamut Ryu","Chillet","Chillet Ignis","Dinossom","Eidrolon","Elphidran","Elphidran Aqua","Jetragon","Kelpsea Ignis","Relaxaurus","Surfent","Xenogard"]],
+["Dragon Cannon","Dragon",30,2,1,0,"Hurls an energy ball imbued with draconic energy at an enemy.",["Astegon","Azurobe","Chillet","Elphidran","Elphidran Aqua","Jormuntide","Jormuntide Ignis","Kelpsea","Kelpsea Ignis","Quivern","Quivern Botan","Relaxaurus","Relaxaurus Lux","Silvegis","Surfent","Surfent Terra","Xenogard","Xenolord"]],
+["Dragon Meteor","Dragon",600,30,1,0,"Calls down numerous small meteorites and launches them at an enemy.",["Astegon","Azurobe","Chillet","Eidrolon","Elphidran","Elphidran Aqua","Jetragon","Jormuntide","Jormuntide Ignis","Quivern","Relaxaurus","Wixen"]],
+["Earth Dash","Terre",100,21,0,0,"Dazemu's special skill. Accelerates all at once and rushes forward at high speed.",["Dazemu"]],
+["Earth Impact","Terre",100,30,0,0,"Mammorest's exclusive skill. Uses massive body to shake the earth, dealing damage over a wide area.",["Mammorest","Mammorest Cryst"]],
+["Electric Ball","Electrique",100,8,1,0,"Fires an electric ball that slowly pursues an enemy.",["Jolthog","Lamball","Pengullet Lux","Puffolt","Rayhound","Sparkit"]],
+["Emperor Slide","Glace",70,10,0,0,"Penking's exclusive skill. Lies on its belly while generating frozen air all around it before sliding at enemies at high speed.",["Penking"]],
+["Evil Slash","Tenebres",95,17,0,0,"Xenovader's exclusive skill. A flash jump followed by a left-hand slash.",["Xenovader"]],
+["Fierce Fang","Neutre",45,2,0,0,"Direhowl's special skill. Swiftly leaps at an enemy and bites into them.",["Direhowl"]],
+["Fierce Fang (Electric)","Electrique",50,2,0,0,"Quickly lunges at the enemy and bites to deal damage.",["Puffolt"]],
+["Fierce Fang (Ground)","Terre",50,2,0,0,"Quickly lunges at the enemy and bites to deal damage.",["Pupperai"]],
+["Fire Ball","Feu",600,30,1,0,"Creates a giant ball of flames and hurls it at an enemy. The ball explodes over a wide area upon impact.",["Arsox","Bakemi","Blazamut","Blazehowl","Blazehowl Noct","Chillet Ignis","Faleris","Finsider Ignis","Flambelle","Flaracle","Foxparks","Fuack Ignis","Gobfin Ignis","Incineram","Incineram Noct","Jetragon","Jormuntide Ignis","Katress Ignis","Kelpsea Ignis","Kitsun","Leezpunk Ignis","Majex","Pyrin","Ragnahawk","Rooby","Suzaku","Tanzee Ignis","Vanwyrm","Wixen"]],
+["Fire Tackle","Feu",115,120,0,0,"",[]],
+["Firefist Breathstorm","Dragon",130,30,0,0,"Astegon's exclusive skill. After throwing two punches forward, it exhales a dragon breath downward.",["Astegon"]],
+["Flame Breath","Feu",90,15,0,0,"Vanwyrm's exclusive skill. Advances while breathing fire from its mouth.",["Vanwyrm"]],
+["Flame Funnel","Feu",300,16,1,0,"Creates multiple spheres of fiery energy, from which countless fireballs shoot towards the enemy.",["Finsider Ignis","Flaracle","Katress Ignis","Kitsun Noct","Sootseer","Tanzee Ignis"]],
+["Flame Wall","Feu",250,12,1,0,"Creates a wall of flames at the enemy's location. The wall of flames will remain for a while, and deal damage to the enemies it touches.",["Blazamut Ryu","Bushi Noct","Chillet Ignis","Flaracle","Fuack Ignis","Katress Ignis","Majex","Moldron","Tanzee Ignis","Whalaska Ignis","Wixen Noct"]],
+["Flame Waltz","Tenebres",130,45,0,0,"Bellanoir Libero's exclusive skill. Dances gracefully while creating an extending ring of flames. Then, it fires mysterious flames that home in on enemies.",["Bellanoir Libero"]],
+["Flare Arrow","Feu",120,8,1,0,"Fires three flaming arrows in succession that home in on an enemy.",["Arsox","Blazehowl","Blazehowl Noct","Chillet Ignis","Elphidran","Faleris","Flambelle","Flaracle","Foxparks","Gobfin Ignis","Incineram","Incineram Noct","Katress","Katress Ignis","Kelpsea Ignis","Maraith","Pyrin","Ragnahawk","Rooby","Suzaku","Tanzee Ignis","Whalaska Ignis","Wixen"]],
+["Flare Storm","Feu",80,18,1,0,"Generates two flaming tornadoes on either side before launching them at an enemy.",["Chikipi","Flambelle","Helzephyr","Jetragon","Jormuntide Ignis","Katress Ignis","Kitsun","Leezpunk Ignis","Ragnahawk","Rooby","Suzaku","Wixen","Wixen Noct"]],
+["Flare Storm","Feu",200,12,1,0,"Generates two flaming tornadoes on either side before launching them at an enemy.",["Chikipi","Flambelle","Helzephyr","Jetragon","Jormuntide Ignis","Katress Ignis","Kitsun","Leezpunk Ignis","Ragnahawk","Rooby","Suzaku","Wixen","Wixen Noct"]],
+["Flare Twister","Feu",130,45,0,0,"Creates multiple flame tornadoes. The tornado continues to spin in circles.",[]],
+["Fluffy Tackle","Neutre",40,4,0,0,"Melpaca's exclusive skill. Charges forward while clad in an aura of sublime adorableness.",["Melpaca"]],
+["Focus Shot","Herbe",65,9,0,0,"Robinquill's exclusive skill. Takes aim while drawing its bow before loosing a powerful shot at an enemy.",["Robinquill","Robinquill Terra"]],
+["Forceful Charge","Terre",120,28,0,0,"Anubis's special skill. Pursues its foe with a high speed dash while releasing energy and unleashes a powerful punch.",["Anubis"]],
+["Freeze Wall","Glace",100,30,1,0,"Creates a wall of ice that rises from the ground. The ice wall remains standing for a while, and breaks after taking enough damage.",["Frostplume","Icelyn","Loupmoon Cryst","Munchill","Polapup","Whalaska","Whalaska Ignis"]],
+["Freezing Charge","Glace",65,9,0,0,"Reindrix's exclusive skill. Charges at an enemy with antlers adorned in ice.",["Reindrix"]],
+["Frenzied Charge","Tenebres",100,15,0,0,"Eye of Cthulhu's exclusive skill. Repeatedly charges at the enemy at high speed.",[]],
+["Frost Burst","Glace",100,45,0,0,"Reptyro Cryst's exclusive skill. Raises its front legs and slams them into the ground causing frozen blasts under its enemies. It simultaneously pounds them with snow balls from above.",["Reptyro Cryst"]],
+["Frost Talon","Glace",95,17,0,0,"Bastigor's exclusive skill. Stomps the ground, creating a fissure of ice ahead. Then, rapidly closes the distance and slashes with the right hand.",["Bastigor"]],
+["Gale Claw","Neutre",60,8,0,0,"Galeclaw's exclusive skill. Soars through the air with its talons outstretched forward.",["Galeclaw"]],
+["Geyser Gush","Eau",600,30,1,0,"Erupts massive pillars of water beneath and around the enemy.",["Amione","Celaray","Fuack","Neptilius","Ophydia","Skutlass","Solmora","Whalaska"]],
+["Giga Horn","Terre",75,11,0,0,"Warsect's exclusive skill. Skewers enemies with its four sturdy horns.",["Warsect","Warsect Terra"]],
+["Glacial Impact","Glace",190,52,0,0,"Bastigor's exclusive skill. Let out a mighty roar and leap into the air. Then, embed both arms into the ground to create a massive ice crack. Continue to channel power into the ground, ultimately causing a large explosion of ice energy",["Bastigor"]],
+["Grand Breach","Eau",700,30,0,0,"Panthalus's exclusive skill. Dives underwater and leaps out after a short delay. The momentum of the leap creates ripples that damage the surrounding area.",["Panthalus"]],
+["Grass Tornado","Herbe",200,12,1,0,"Generates two tornadoes on either side before launching them at an enemy.",["Beegarde","Braloha","Bristla","Broncherry","Caprity","Chikipi","Cinnamoth","Clovee","Elgrove","Elizabee","Flopie","Galeclaw","Herbil","Lullu","Lyleen","Mammorest","Nitewing","Palumba","Petallia","Quivern","Quivern Botan","Robinquill","Shroomer","Shroomer Noct","Souffline","Tanzee","Vaelet","Verdash","Wumpo Botan"]],
+["Ground Cutter","Terre",145,35,0,0,"Knocklem's exclusive skill. Takes a big swing and throws the ring on its back. The ring flies in a circular trajectory.",["Knocklem"]],
+["Ground Pound","Neutre",85,14,0,0,"Gorirat's exclusive skill. Pounds the ground twice before leaping into the air and unleashing a powerful punch.",["Gorirat","Gorirat Terra"]],
+["Ground Smash","Terre",140,35,0,0,"Anubis's special skill. Leaps high into the air before diving to the ground with a punch. The force of the impact deals damage over a wide area.",["Anubis"]],
+["Grudge Barrage","Tenebres",130,31,0,0,"Splatterina's exclusive skill. Teleports instantly and launches a slash. It then teleports above the enemy, drives its weapon into them, and unleashes a wave of dark energy.",["Splatterina"]],
+["Heavy Thunder Tank","Electrique",160,42,0,0,"Grizzbolt's exclusive skill. Attacks with a minigun pulled out from somewhere. Ends with a single, charged power shot.",["Grizzbolt"]],
+["Hellfire Claw","Feu",70,10,0,0,"Incineram's exclusive skill. Draws near enemies using its left claw to slash them into the air before cutting them down with its right claw.",["Incineram","Incineram Noct"]],
+["High Breach","Glace",165,40,0,0,"Whalaska's exclusive skill. Charges straight ahead and briefly submerges, then bursts high into the air to launch an attack. An ice-element explosion occurs upon emerging.",["Whalaska","Whalaska Ignis"]],
+["Holy Burst","Neutre",700,30,1,0,"Creates a wide explosion of light at the enemy's location and around it.",["Cattiva","Celesdir","Chikipi","Frostallion","Hartalis","Lamball","Lapure","Lullu","Mimog","Paladius","Panthalus","Selyne","Valentail","Vixy","Yakumo"]],
+["Holy Nova","Neutre",200,45,0,0,"Celesdir's exclusive skill. After igniting a burst of holy light across a vast area ahead, it strides forward, radiating holy light around itself.",["Celesdir"]],
+["Horn Burst","Terre",600,30,0,0,"Pierdon's exclusive skill. Rakes the ground with its horn, then hurls a rock projectile at enemies.",["Pierdon"]],
+["Hydro Jet","Eau",40,2,1,0,"Hurls a high speed ball of water at an enemy.",["Amione","Celaray","Faleris Aqua","Flopie","Foxparks Cryst","Fuack","Gloopie","Gobfin","Jelliette","Kelpsea","Killamari","Pengullet","Skutlass","Surfent","Suzaku Aqua","Teafant","Turtacle"]],
+["Hydro Laser","Eau",450,20,1,0,"Shoots pressurized water at extreme velocities, sweeping over a wide area in front of it.",["Amione","Azurobe","Broncherry Aqua","Celaray","Croajiro","Dumud","Elphidran Aqua","Faleris Aqua","Finsider","Fuack","Gobfin","Jormuntide","Kelpsea","Killamari Primo","Ophydia","Pengullet","Penking","Skutlass","Solmora","Surfent","Suzaku Aqua","Teafant","Turtacle"]],
+["Hydro Slicer","Eau",350,16,1,0,"Mows down the frontal area with a blast of compressed water. The area struck by the blast erupts with water after a short delay.",["Amione","Croajiro Noct","Fuack Ignis","Gloopie","Jelliette","Jellroy","Lapure","Skutlass","Solmora","Turtacle"]],
+["Hydro Spin","Eau",95,15,0,0,"Turtacle's exclusive skill. Uses jet-powered propulsion to spin rapidly and launch itself at the enemy.",["Turtacle","Turtacle Terra"]],
+["Iaigiri","Feu",65,9,0,0,"Bushi's exclusive skill. After Holding the sword, he appears in front of the enemy in an instant and unleashes a Ultra-fast sword draw attack.",["Bushi","Bushi Noct"]],
+["Ice Missile","Glace",40,2,1,0,"Creates ice lances in the air that fly towards enemies.",["Azurobe Cryst","Bristla","Chillet","Cryolinx","Depresso","Foxcicle","Foxparks Cryst","Frostallion","Frostplume","Fuack","Hangyu Cryst","Icelyn","Jolthog Cryst","Kingpaca Cryst","Loupmoon Cryst","Mau Cryst","Paladius","Pengullet","Polapup","Reindrix","Reptyro Cryst","Ribbuny","Sibelyx","Snugloo","Suzaku Aqua","Swee","Sweepa","Vanwyrm Cryst","Whalaska","Wumpo"]],
+["Iceberg","Glace",120,8,1,0,"Summons a sharp ice lance under an enemy.",["Azurobe Cryst","Bastigor","Bristla","Cryolinx","Foxcicle","Foxparks Cryst","Frostallion","Frostplume","Icelyn","Jolthog Cryst","Kingpaca Cryst","Mammorest Cryst","Mau Cryst","Paladius","Pengullet","Penking","Polapup","Reindrix","Reptyro Cryst","Ribbuny","Sibelyx","Silvegis","Snugloo","Swee","Sweepa","Whalaska","Whalaska Ignis","Wumpo"]],
+["Icicle Bullet","Glace",250,12,1,1,"Generates multiple sharp ice blocks in the sky and fires them at the enemy.",["Foxparks Cryst","Frostplume","Loupmoon Cryst","Muffly","Snugloo"]],
+["Icicle Cutter","Glace",80,4,1,0,"Creates a crescent blade of ice and hurls it forward.",["Bushi","Chillet","Cryolinx","Foxcicle","Foxparks Cryst","Frostallion","Frostplume","Gobfin","Hangyu Cryst","Icelyn","Jolthog Cryst","Kingpaca Cryst","Loupmoon","Loupmoon Cryst","Lunaris","Lyleen Noct","Mammorest Cryst","Mau Cryst","Muffly","Munchill","Pengullet","Reindrix","Sibelyx","Silvegis","Snugloo","Swee","Sweepa","Vanwyrm Cryst","Whalaska","Wumpo"]],
+["Icicle Line","Glace",300,16,1,0,"Generates a pillar of ice that moves in a straight line.",["Loupmoon Cryst","Muffly","Polapup","Snugloo","Xenogard"]],
+["Ignis Blast","Feu",40,2,1,0,"Hurls a ball of fire straight at an enemy.",["Arsox","Blazamut","Blazehowl","Bushi","Chillet Ignis","Direhowl","Faleris","Finsider Ignis","Flambelle","Flaracle","Foxparks","Fuack Ignis","Gobfin Ignis","Incineram","Incineram Noct","Jormuntide Ignis","Katress","Katress Ignis","Kelpsea Ignis","Kitsun","Leezpunk Ignis","Maraith","Pyrin","Pyrin Noct","Reptyro","Rooby","Sootseer","Suzaku","Tanzee Ignis","Vanwyrm","Whalaska Ignis","Wixen"]],
+["Ignis Breath","Feu",160,8,1,0,"Shoots flames at an enemy, dealing continuous damage.",["Arsox","Blazamut","Blazamut Ryu","Blazehowl","Blazehowl Noct","Bushi","Chillet Ignis","Faleris","Finsider Ignis","Flaracle","Foxparks","Fuack Ignis","Jormuntide Ignis","Kelpsea Ignis","Leezpunk","Leezpunk Ignis","Moldron","Pyrin Noct","Ragnahawk","Reptyro","Suzaku","Vanwyrm"]],
+["Ignis Charge","Feu",85,14,0,0,"Pyrin's exclusive skill. Charges forward while engulfed in a veil of flames. Flames continue to burn in its path.",["Pyrin"]],
+["Ignis Rage","Feu",500,24,1,0,"Energizes the surrounding ground, causing it to explode after a set amount of time.",["Arsox","Blazamut","Blazehowl","Blazehowl Noct","Bushi","Faleris","Felbat","Flambelle","Gobfin Ignis","Incineram","Incineram Noct","Kitsun","Leezpunk Ignis","Pyrin","Pyrin Noct","Reptyro","Rooby","Starryon","Tanzee Ignis"]],
+["Ignis Slam","Feu",85,14,0,0,"Pyrin's exclusive skill. Charges forward while clad in a veil of flames. Flames continue to burn in its wake.",[]],
+["Implode","Neutre",300,16,1,0,"Risks its life to cause a violent explosion. Becomes incapacitated afterwards.",["Chikipi","Lamball","Lovander","Tocotoco"]],
+["Intimidate","Neutre",1,1,0,0,"en Text",[]],
+["Jumping Claw","Tenebres",55,7,0,0,"Loupmoon's exclusive skill. Leaps forward and attacks twice with vicious claws imbued with dark energy.",["Loupmoon"]],
+["Jumping Stinger","Terre",110,24,0,0,"Menasting's exclusive skill. Jumps high and stabs its prey with its tail. The poison from the tail is deadly.",["Menasting","Menasting Terra"]],
+["Kerauno","Electrique",100,30,0,0,"Orserk's exclusive skill. Summons a blade of lightning while leaping into the air before throwing it at an enemy.",["Orserk"]],
+["Kingly Slam","Neutre",100,21,0,0,"Kingpaca's exclusive skill. Leaps high into the air before smashing into an enemy with its massive body.",["Kingpaca","Kingpaca Cryst"]],
+["Konoha Flip","Herbe",105,20,0,0,"Herbil's exclusive skill. After a brief moment of preparation, charges at the enemy at high speed, finishing with a flip.",["Herbil"]],
+["Lantern Sweep","Eau",95,15,0,0,"Ghangler's exclusive skill. Lashes forward with the lantern atop its head, sweeping broadly ahead.",[]],
+["Lawn Bowling","Herbe",100,20,0,0,"Wumpo Botan's exclusive skill. Rolls a ball made of grass as it moves forward, and when it grows large enough, it throws it to cause an explosion.",["Wumpo Botan"]],
+["Leaping Roundhouse","Herbe",90,15,0,0,"Verdash's exclusive skill. While jumping forward, it sweeps the surroundings with a high-speed spinning kick.",["Verdash"]],
+["Lethal Laser","Electrique",170,50,0,1,"After aiming at the enemy, fires multiple ultra-fast lightning lasers.",[]],
+["Lethal Step","Tenebres",140,35,0,0,"Starryon's exclusive skill. Confuses enemies with flickering steps and launches slashing attack with its sharp horn.",["Starryon"]],
+["Lightning Bolt","Electrique",450,20,1,0,"Charges electric energy before blasting enemies with a powerful shock.",["Beakon","Celaray Lux","Cremis","Dazzi","Dinossom Lux","Fenglope Lux","Grizzbolt","Jolthog","Mossanda Lux","Orserk","Puffolt","Rayhound","Relaxaurus Lux","Slowatt","Snock","Sparkit","Univolt"]],
+["Lightning Claw","Electrique",90,22,0,0,"Grizzbolt's special skill. After leaping at an enemy and tearing at it twice with its electrically charged claws, it attacks the ground, sending an electric shock throughout the area.",["Grizzbolt"]],
+["Lightning Dive","Electrique",80,12,0,0,"Beakon's exclusive skill. First, it strikes the enemy's location with lightning. Then, while gliding forward, it drops lightning to the left and right.",["Beakon"]],
+["Lightning Gale","Electrique",60,8,0,0,"Univolt's exclusive skill. Generates bolts of lightning all around while charging at its target.",["Univolt"]],
+["Lightning Streak","Electrique",160,8,1,0,"Generates a lightning bolt that moves forward in a line.",["Azurmane","Beakon","Celaray Lux","Dazzi","Fenglope Lux","Gobfin Ignis","Grizzbolt","Jolthog","Mossanda Lux","Orserk","Rayhound","Relaxaurus Lux","Slowatt","Snock","Sparkit","Univolt"]],
+["Lightning Strike","Electrique",300,16,1,0,"Acts as a lightning rod, calling down thunderbolts that electrocute the surrounding area.",["Bushi","Dazzi","Dinossom Lux","Grizzbolt","Mossanda Lux","Orserk","Pengullet Lux","Puffolt","Relaxaurus Lux","Snock","Univolt"]],
+["Lock-On Lunge","Tenebres",100,15,0,0,"Eye of Cthulhu's exclusive skill. Repeatedly charges at the enemy.",[]],
+["Lock-on Laser","Electrique",70,15,1,0,"Takes aim at an enemy before firing a super high speed laser.",["Univolt"]],
+["Lotus Bloom","Herbe",700,30,0,0,"Ophydia's exclusive skill. Burrows into the ground and vanishes. It then emerges at the surface as a flower bud, blooms, and unleashes a wide-area attack.",["Ophydia"]],
+["Maelstrom","Eau",500,24,0,0,"Panthalus's exclusive skill. Creates a vortex around the enemy. The vortex pulls targets toward its center while shrinking, ending in a high-pressure water pillar explosion.",["Panthalus"]],
+["Magma Laser","Feu",700,30,0,0,"Moldron's exclusive skill. Emits a thermal beam from its mouth that scorches the ground. Heated ground forms magma pools that damage enemies on contact.",["Moldron"]],
+["Magma Serpent","Feu",145,30,0,0,"Jormuntide Ignis's exclusive skill. Letting out a roar, it charges toward the enemy, twisting its fire-covered body as it advances.",["Jormuntide Ignis"]],
+["Magma Spit","Feu",600,30,0,0,"Moldron's exclusive skill. Spits a mass of magma from its mouth. The impact creates magma pools that damage enemies on contact.",["Moldron"]],
+["Magna Crush","Dragon",160,42,0,0,"Blazamut's exclusive skill. After making a big jump, while moving at high speed in the air, gathers strength and unleashes a punch with full might.",["Blazamut Ryu"]],
+["Megaton Implode","Neutre",500,55,0,0,"Risks life to cause a massive explosion. Those who perish for their duty become glistening stars in the night sky.",["Tocotoco"]],
+["Meteorain","Dragon",700,30,0,0,"Drops countless meteorites, generating an array of shock waves.",["Eidrolon","Jetragon"]],
+["Moonlight Beam","Neutre",170,40,0,0,"Selyne's exclusive skill. Stores energy in the moon on its back, then fires a crescent-shaped beam forward.",["Selyne"]],
+["Multicutter","Herbe",160,8,1,0,"The user fires three high-speed blades of wind in quick succession that fly straight at enemies.",["Caprity Noct","Leafan","Lullu"]],
+["Mummy Rush","Tenebres",500,24,0,0,"Gildra's exclusive skill. Extends bandages from its hands to deliver a series of attacks.",["Gildra"]],
+["Muscle Slam","Neutre",80,12,0,0,"Broncherry's exclusive skill. Turns sideways before tackling enemies in front of it, sending them flying into the air.",["Broncherry","Broncherry Aqua"]],
+["Mystic Whirlwind","Dragon",70,10,0,0,"Elphidran's exclusive skill. Generates twin whirlwinds imbued with a mysterious power that pursues enemies.",["Elphidran","Elphidran Aqua"]],
+["Needle Spear","Herbe",55,7,0,0,"Beegarde's exclusive skill. Charges at the enemy at high speed, delivering a final thrust with a spear.",["Beegarde"]],
+["Nightmare Ball","Tenebres",300,16,1,0,"Creates a giant ball of darkness and hurls it at an enemy.",["Astegon","Bakemi","Bellanoir","Bellanoir Libero","Cawgnito","Croajiro Noct","Daedream","Depresso","Felbat","Frostallion Noct","Gildra","Gloopie","Helzephyr","Helzephyr Lux","Hoocrates","Hoodle","Katress","Killamari","Kitsun Noct","Leezpunk","Loupmoon","Lyleen Noct","Maraith","Mau","Menasting","Necromus","Nitemary","Nox","Nyafia","Omascul","Shadowbeak","Shroomer Noct","Smokie","Sootseer","Splatterina","Starryon","Tombat","Vaelet","Vanwyrm","Vanwyrm Cryst","Wispaw","Xenovader"]],
+["Nightmare Bloom","Tenebres",160,50,0,0,"Bellanoir Libero's exclusive skill. Disappears suddenly, then reappears while firing a barrage of beams. The beams spread like a beautiful flower in bloom.",["Bellanoir Libero"]],
+["Nightmare Ray","Tenebres",140,50,0,0,"Bellanoir's exclusive skill. Disappears suddenly, then reappears while firing a barrage of beams.",["Bellanoir"]],
+["Ocular Rush","Tenebres",60,1,0,0,"Demon Eye's exclusive skill. Charges at the enemy, bouncing off the ground or walls on impact.",[]],
+["Omega Laser","Dragon",200,55,0,0,"Xenolord's exclusive skill. Summons the light of destruction from subspace and continuously fires it in all directions, burning everything in its sight to ashes.",["Xenolord"]],
+["Pal Blast","Neutre",450,20,1,0,"Charges destructive energy before firing a high-powered beam forward across a wide area.",["Blazehowl","Cattiva","Celesdir","Direhowl","Dogen","Eikthyrdeer","Elphidran","Fenglope","Galeclaw","Gorirat","Grintale","Kingpaca","Lamball","Lapure","Lovander","Lunaris","Melpaca","Mimog","Mozzarina","Nitewing","Paladius","Ribbuny","Rushoar","Sweepa","Tocotoco","Valentail","Vixy","Woolipop","Yakumo"]],
+["Persistent Slash","Terre",90,4,0,0,"Pupperai's exclusive skill. Charges at full speed, delivering two consecutive slashes with the wooden stick held in its mouth.",["Pupperai"]],
+["Phantom Peck","Tenebres",55,7,0,0,"Cawgnito's exclusive skill. Teleports next to an enemy before attacking with its beak.",["Cawgnito"]],
+["Phoenix Flare","Feu",135,28,0,0,"Faleris's special skill. Covers its body in a tornado of flames before charging forward.",["Faleris"]],
+["Phoenix Tide","Eau",135,28,0,0,"Faleris Aqua's exclusive skill. After summoning a massive tornado, it envelops its body in water and charges forward.",["Faleris Aqua"]],
+["Plasma Funnel","Electrique",120,8,1,0,"Creates two balls of electric energy that fire numerous bolts of lightning at enemies.",["Dinossom Lux","Lunaris","Penking Lux","Slowatt"]],
+["Poison Blast","Tenebres",30,2,1,0,"Hurls poison sludge at an enemy.",["Beegarde","Caprity Noct","Carnibora","Croajiro Noct","Daedream","Depresso","Elizabee","Felbat","Jellroy","Killamari","Leezpunk","Leezpunk Ignis","Lovander","Menasting","Nyafia","Prixter","Prunelia","Shroomer","Shroomer Noct","Tarantriss","Tombat","Vaelet","Xenovader"]],
+["Poison Fog","Tenebres",0,30,0,0,"Generates a fog of poison in front, causing the opponent to become poisoned.",["Caprity Noct","Cinnamoth","Nyafia","Prunelia","Tarantriss","Vaelet"]],
+["Poison Shower","Tenebres",90,22,0,0,"Focuses energy into the body and scatters poison orbs in all directions.",["Caprity Noct","Jellroy","Nyafia","Prunelia","Tarantriss"]],
+["Polykeraunos","Electrique",180,50,0,0,"Orserk's exclusive skill. Summons numerous thunder spears and hurls them at the enemy. The first spear is imbued with the power of lightning and explodes after a few seconds.",["Orserk"]],
+["Power Bomb","Neutre",120,8,1,0,"Charges a massive amount of energy before firing a large destructive ball.",["Anubis","Celesdir","Cremis","Direhowl","Dogen","Eikthyrdeer","Eikthyrdeer Terra","Finsider","Fuddler","Gildane","Gorirat","Grintale","Hangyu","Hartalis","Jolthog","Jolthog Cryst","Kelpsea","Kikit","Killamari Primo","Kingpaca","Lamball","Lapure","Lifmunk","Lovander","Lunaris","Mammorest","Mammorest Cryst","Melpaca","Mimog","Mozzarina","Nitewing","Nox","Paladius","Ribbuny","Rushoar","Swee","Tocotoco","Valentail","Vixy","Woolipop","Yakumo"]],
+["Power Shot","Neutre",80,4,1,0,"Charges energy into a focused blast.",["Blazamut","Blazehowl","Caprity","Cattiva","Celaray","Celesdir","Chikipi","Cremis","Cryolinx","Cryolinx Terra","Dazemu","Direhowl","Dogen","Eikthyrdeer","Eikthyrdeer Terra","Fuack","Fuddler","Gildane","Gobfin","Gobfin Ignis","Gorirat","Gorirat Terra","Grintale","Hangyu","Hangyu Cryst","Hartalis","Jolthog","Jolthog Cryst","Kikit","Killamari Primo","Kingpaca","Knocklem","Lamball","Lapure","Lifmunk","Lovander","Lunaris","Melpaca","Mimog","Mossanda","Mozzarina","Paladius","Ribbuny","Robinquill","Rooby","Rushoar","Sekhmet","Sweepa","Tocotoco","Valentail","Vixy","Woolipop","Xenovader","Yakumo"]],
+["Predator Blast","Neutre",200,20,0,0,"",[]],
+["Predator Mark","Neutre",180,20,0,0,"",[]],
+["Predator Surge","Neutre",100,20,0,0,"",[]],
+["Psycho Gravity","Tenebres",110,35,0,0,"Utilizes psychokinesis to grab enemies before flinging them to the ground from above.",[]],
+["Punch","Neutre",12,1,0,0,"Punch with conviction; believe in the power of the fist.",[]],
+["Punch Flurry","Neutre",40,2,0,0,"Cattiva's exclusive skill. Chases after enemies, swinging both arms and delivering a flurry of punches.",["Cattiva"]],
+["Purifying Light","Neutre",250,100,0,0,"Hartalis' exclusive skill. Leaps high into the air, condensing immense energy into a descending sphere of light. When it strikes the ground, it purifies all on the ground below.",["Hartalis"]],
+["Radiant Barrage","Neutre",700,30,0,0,"Unleashes a sphere of light that slowly tracks down an enemy. As it nears its target, it splits into countless light bullets that strike all at once.",["Hartalis"]],
+["Raging Bull Rush","Herbe",650,30,0,0,"Elgrove's exclusive skill. Enters a violent frenzy and unleashes four consecutive rage-fueled Grass-element charge attacks.",["Elgrove"]],
+["Raging Flame Wave","Feu",145,38,0,0,"Faleris's exclusive skill. Generates multiple tornadoes of scorching fire and charges forward. The tornadoes converge in the center and eventually merge into a single massive tornado.",["Faleris"]],
+["Raid Cutter","Herbe",400,20,0,1,"Shoots countless wind swords that fly straight towards the enemy.",["Leafan"]],
+["Rapid Kick","Herbe",250,12,0,0,"Leafan's exclusive skill. Rapidly delivers a series of consecutive roundhouse kicks, finishing with an engery blast.",["Leafan"]],
+["Reckless Charge","Neutre",55,2,0,0,"Rushoar's special skill. Takes aim at a foe and rushes at them with a mad charge.",["Rushoar"]],
+["Reflect Leaf","Herbe",400,20,1,0,"Launches a blade of wind that rebounds off enemies or trees, striking repeatedly. Can ricochet up to four times.",["Herbil","Leafan","Needoll","Palumba","Souffline"]],
+["Rock Lance","Terre",400,20,1,0,"Generates a sharp rock spear under an enemy.",["Anubis","Blazamut","Bulldosu","Cryolinx Terra","Digtoise","Dumud","Eikthyrdeer","Eikthyrdeer Terra","Fuddler","Gorirat Terra","Hangyu","Kikit","Kingpaca","Knocklem","Lapiron","Menasting","Menasting Terra","Necromus","Pierdon","Prixter","Pupperai","Reptyro","Reptyro Cryst","Robinquill Terra","Rushoar","Surfent Terra","Turtacle Terra","Warsect","Woolipop Terra"]],
+["Rockburst","Terre",300,16,1,0,"Causes the ground to shake before hurling a massive stone mass at its surroundings.",["Bastigor","Bulldosu","Cryolinx Terra","Dazemu","Dualith","Dumud Gild","Elgrove","Gildane","Gorirat Terra","Kikit","Knocklem","Lapiron","Menasting Terra","Moldron","Pierdon","Turtacle Terra","Warsect Terra","Woolipop Terra"]],
+["Rocket Arm","Terre",600,30,0,0,"Dualiths exclusive skill. Detaches its left arm to sweep enemies, then launches its right arm.",["Dualith"]],
+["Rocket Slam","Dragon",50,6,0,0,"Chillet's exclusive skill. Gathers a bit of strength and it leaps forward. When landing it's always scared so it closes its eyes.",["Chillet","Chillet Ignis"]],
+["Rocky Impact","Terre",600,30,1,0,"Shakes the ground and lifts a massive boulder into the air.",["Bulldosu","Gildra","Lapiron","Moldron","Pierdon","Pupperai","Sekhmet","Woolipop Terra"]],
+["Rolling Scratch","Terre",400,20,0,0,"Sekhmets exclusive skill. Spins forward to quickly close the distance and scratch the enemy.",["Sekhmet"]],
+["Roly Poly","Neutre",40,2,0,0,"Lamball's exclusive skill. Curls into a ball, rolling after any enemies in its way. Becomes dizzy and unable to move after the attack ends.",["Lamball"]],
+["Root Cannon","Herbe",700,30,0,0,"Dualiths exclusive skill. Fires a Grass-elemental energy projectile from its arm. Upon impact, the blast transforms into persistent roots that track and pierce the enemy from below.",["Dualith"]],
+["Rush Beak","Feu",85,14,0,0,"Ragnahawk's exclusive skill. While flapping forward, it strikes with its beak to ignite fires in front, right, and left, causing a small explosion.",["Ragnahawk"]],
+["Sacred Rain","Neutre",200,60,0,0,"Hartalis' exclusive skill. Fades from sight, then calls down a massive barrage of light pillars centered on its position.",["Hartalis"]],
+["Sand Tornado","Terre",200,12,1,0,"Generates two sand tornadoes on either side before launching them at an enemy.",["Anubis","Beakon","Chikipi","Cinnamoth","Cryolinx Terra","Digtoise","Dumud Gild","Eikthyrdeer Terra","Fuddler","Galeclaw","Gildra","Gumoss","Hangyu","Hoocrates","Kikit","Lapiron","Mau","Menasting Terra","Nitewing","Prixter","Pupperai","Ragnahawk","Robinquill Terra","Surfent Terra","Tocotoco","Valentail","Woolipop Terra"]],
+["Sand Twister","Terre",500,24,1,0,"Creates multiple sand tornadoes. The tornadoes continuously spin in circles.",["Bulldosu","Dazemu","Dumud Gild","Gildra","Knocklem","Lapiron","Pierdon","Pupperai","Sekhmet","Woolipop Terra"]],
+["Satellite Bit","Dragon",80,12,0,0,"Xenolord's exclusive skill. Generates four satellite-like wings with auto-attack functionality. These wings will automatically track and attack the enemy when the next attack is launched.",["Xenolord"]],
+["Scorching Lantern Sweep","Feu",95,15,0,0,"Ghangler Ignis's exclusive skill. Lashes forward with the flaming lantern atop its head, sweeping broadly ahead.",[]],
+["Seed Machine Gun","Herbe",80,4,1,0,"Fires a volley of hard seeds at enemies in front of it.",["Bristla","Carnibora","Cattiva","Celaray","Clovee","Flopie","Gorirat","Gumoss","Herbil","Leafan","Lifmunk","Lullu","Lyleen","Mammorest","Mossanda","Needoll","Palumba","Petallia","Quivern Botan","Ribbuny Botan","Shroomer","Souffline","Tanzee","Verdash","Vixy","Warsect","Warsect Terra"]],
+["Seed Mine","Herbe",120,8,1,0,"Launches a deadly seed. If it hits an enemy, the seed explodes.",["Braloha","Broncherry","Broncherry Aqua","Carnibora","Cinnamoth","Clovee","Dinossom","Dualith","Gumoss","Lyleen","Mossanda","Needoll","Ophydia","Palumba","Prunelia","Ribbuny Botan","Robinquill","Shroomer","Shroomer Noct","Souffline","Tanzee","Vaelet","Wumpo Botan"]],
+["Seigetsu Blade","Neutre",110,24,0,0,"Selyne's exclusive skill. Fires two consecutive high-speed blades imbued with the power of moonlight.",["Selyne"]],
+["Seigetsu Flash","Neutre",110,24,0,1,"Selyne's exclusive skill. Launches three high-speed swords imbued with moonlight power in succession.",[]],
+["Servant Call","Tenebres",50,10,0,0,"Eye of Cthulhu's exclusive skill. Summons four Servants that charge at enemies to deal damage. Servants disappear after taking damage or after a short time.",[]],
+["Shadow Burst","Tenebres",80,4,1,0,"Quickly discharges dark energy, damaging those around it.",["Bakemi","Blazehowl Noct","Cawgnito","Daedream","Dazzi Noct","Depresso","Felbat","Frostallion Noct","Gloopie","Helzephyr","Hoocrates","Hoodle","Incineram","Incineram Noct","Katress","Killamari","Leezpunk","Loupmoon","Lovander","Lyleen Noct","Maraith","Mau","Menasting","Necromus","Nox","Nyafia","Omascul","Pyrin Noct","Shadowbeak","Shroomer Noct","Smokie","Splatterina","Tombat","Wispaw"]],
+["Shell Charge","Electrique",500,24,0,0,"Snock's exclusive skill. Withdraws into its shell to reduce damage taken while building electric charge. Once fully charged, it discharges, damaging nearby enemies. After discharging, the Attack of this Pal's Electric skills is increased for a limited time.",["Snock"]],
+["Shell Spin","Terre",65,9,0,0,"Digtoise's exclusive skill. Moves while spinning its whole body at high speeds. Drills through enemies, dealing continuous damage.",["Digtoise"]],
+["Shockwave","Electrique",80,4,1,0,"Quickly discharges electricity, shocking those around it.",["Azurmane","Beakon","Celaray Lux","Cremis","Dazzi","Dinossom Lux","Fenglope Lux","Grizzbolt","Helzephyr Lux","Jolthog","Melpaca","Mossanda Lux","Puffolt","Rayhound","Relaxaurus Lux","Slowatt","Snock","Sparkit","Univolt"]],
+["Slime Press (Dark)","Tenebres",50,1,0,0,"Purple Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slime Press (Fire)","Feu",50,1,0,0,"Red Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slime Press (Grass)","Herbe",50,1,0,0,"Green Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slime Press (Neutral)","Neutre",50,1,0,0,"Illuminant Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slime Press (Rainbow)","Neutre",100,1,0,0,"Rainbow Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slime Press (Water)","Eau",50,1,0,0,"Blue Slime's exclusive skill. Leaps toward the enemy and delivers an attack.",[]],
+["Slither Slam","Eau",145,30,0,0,"Jormuntide's exclusive skill. Letting out a roar, it charges toward the enemy, twisting its water-covered body as it advances.",["Jormuntide"]],
+["Snow Bowling","Glace",100,20,0,0,"Wumpo's exclusive skill. Rolls a snowball as it moves forward, and when it grows large enough, it throws it to cause an explosion.",["Wumpo"]],
+["Snow Claw","Glace",55,7,0,0,"Loupmoon Cryst's exclusive skill. Leaps forward and attacks twice with vicious claws imbued with ice element.",["Loupmoon Cryst"]],
+["Solar Blast","Herbe",450,20,1,0,"Charges solar energy before blasting enemies with a powerful beam.",["Beegarde","Braloha","Bristla","Broncherry","Caprity","Carnibora","Cinnamoth","Clovee","Dinossom","Dualith","Elizabee","Flopie","Gumoss","Lifmunk","Lullu","Lyleen","Mammorest","Mossanda","Needoll","Petallia","Prunelia","Ribbuny Botan","Robinquill","Robinquill Terra","Shroomer","Souffline","Tanzee","Vaelet","Verdash","Warsect","Wumpo","Wumpo Botan"]],
+["Somersault Scratch","Terre",300,16,0,0,"Sekhmets exclusive skill. Scratches the enemy while performing a backward somersault to create distance.",["Sekhmet"]],
+["Soul Drain","Tenebres",100,30,0,0,"Omascul's exclusive skill. Suddenly appears near the enemy, firmly restraining them with its arms, and absorbs the HP of the restrained enemy.",["Omascul"]],
+["Spark Blast","Electrique",30,2,1,0,"The user releases a lightning ball that expands outward in a forward, circular pattern.",["Azurmane","Beakon","Cremis","Grizzbolt","Helzephyr Lux","Mossanda Lux","Orserk","Rayhound","Relaxaurus Lux","Sparkit","Univolt"]],
+["Spear Thrust","Neutre",120,40,0,0,"Paladius's exclusive skill. Clads itself in holy power before charging forward with its spear. The shield in its other hand protects from attacks during the charge.",["Paladius"]],
+["Spine Vine","Herbe",250,12,1,0,"Generates spiny thorns that chase an enemy along the ground, piercing them from below.",["Braloha","Bristla","Broncherry","Broncherry Aqua","Caprity","Carnibora","Dinossom","Elizabee","Lifmunk","Lyleen","Mammorest","Mossanda","Needoll","Petallia","Prunelia","Robinquill","Shroomer","Verdash","Wumpo Botan"]],
+["Spinning Lance","Herbe",70,9,0,0,"Elizabee's exclusive skill. Channels power into its staff, and unleashes it in a whirl.",[]],
+["Spinning Roundhouse","Terre",100,21,0,0,"Anubis's special skill. Performs a spin kick with its strong legs, cutting down enemies over a wide area.",["Anubis"]],
+["Spinning Staff","Herbe",70,9,0,0,"Elizabee's exclusive skill. Channels power into its staff, and unleashes it in a whirl.",["Elizabee"]],
+["Spirit Dash","Tenebres",90,15,0,0,"Maraith's exclusive skill. While running slowly, it continuously launches flickering fireballs toward the enemy.",["Maraith"]],
+["Spirit Fire","Feu",45,7,1,0,"Shoots fireballs towards an enemy. The fireballs explode after a short distance, generating smaller fireballs that spread forward.",["Arsox","Bushi Noct","Faleris","Finsider Ignis","Flambelle","Foxparks","Fuack Ignis","Gobfin Ignis","Helzephyr","Incineram","Incineram Noct","Jetragon","Kelpsea Ignis","Kitsun","Kitsun Noct","Leezpunk Ignis","Majex","Moldron","Necromus","Pyrin","Quivern","Ragnahawk","Rooby","Sootseer","Suzaku","Tanzee Ignis","Vanwyrm","Wixen"]],
+["Spirit Fire","Feu",80,4,1,0,"Shoots fireballs towards an enemy. The fireballs explode after a short distance, generating smaller fireballs that spread forward.",["Arsox","Bushi Noct","Faleris","Finsider Ignis","Flambelle","Foxparks","Fuack Ignis","Gobfin Ignis","Helzephyr","Incineram","Incineram Noct","Jetragon","Kelpsea Ignis","Kitsun","Kitsun Noct","Leezpunk Ignis","Majex","Moldron","Necromus","Pyrin","Quivern","Ragnahawk","Rooby","Sootseer","Suzaku","Tanzee Ignis","Vanwyrm","Wixen"]],
+["Spirit Flame","Tenebres",200,12,1,0,"Fires three balls of malice that relentlessly pursue an enemy.",["Astegon","Bakemi","Bellanoir","Blazehowl Noct","Bushi Noct","Cawgnito","Daedream","Felbat","Flambelle","Foxcicle","Foxparks","Frostallion Noct","Gildra","Helzephyr","Hoocrates","Hoodle","Jellroy","Katress","Kitsun","Kitsun Noct","Leezpunk","Loupmoon","Maraith","Mau","Mimog","Necromus","Nitemary","Nox","Pyrin Noct","Shadowbeak","Sibelyx","Sootseer","Starryon","Tombat","Wispaw","Wixen","Wixen Noct"]],
+["Splash","Eau",160,8,1,0,"Generates a column of water that travels in a straight line.",["Amione","Celaray Lux","Croajiro","Faleris Aqua","Finsider Ignis","Gloopie","Neptilius","Pengullet Lux","Polapup","Skutlass","Solmora","Whalaska"]],
+["Star Mine","Neutre",110,55,0,0,"Generates stars around the enemy that explode on contact. Stars also explode after some time.",["Selyne"]],
+["Stone Beat","Terre",170,60,1,0,"Shakes the ground and lifts a massive boulder into the air.",["Bastigor","Braloha","Cryolinx Terra","Gildane","Necromus","Turtacle Terra","Warsect Terra"]],
+["Stone Blast","Terre",80,4,1,0,"Fires a barrage of stones forward.",["Anubis","Blazamut","Bulldosu","Cryolinx Terra","Dazemu","Digtoise","Dualith","Dumud","Dumud Gild","Eikthyrdeer","Eikthyrdeer Terra","Fuddler","Gildane","Gorirat","Gorirat Terra","Grintale","Gumoss","Kikit","Knocklem","Lapiron","Menasting Terra","Mozzarina","Nyafia","Pierdon","Prixter","Pupperai","Rayhound","Reptyro","Reptyro Cryst","Robinquill Terra","Rushoar","Sekhmet","Surfent Terra","Verdash","Warsect","Woolipop Terra","Yakumo"]],
+["Stone Cannon","Terre",120,8,1,0,"Digs up a boulder and hurls it at an enemy.",["Bastigor","Bulldosu","Cryolinx","Cryolinx Terra","Dazemu","Digtoise","Dogen","Eikthyrdeer","Eikthyrdeer Terra","Fuddler","Gorirat Terra","Grintale","Knocklem","Lapiron","Mammorest Cryst","Menasting","Menasting Terra","Mossanda","Mozzarina","Pierdon","Pupperai","Reptyro","Surfent Terra","Tanzee","Verdash","Warsect","Warsect Terra","Woolipop Terra"]],
+["Stone Claw","Terre",95,17,0,0,"Cryolinx Terra's exclusive skill. First, it strikes with its claws, followed by a second slash, and culminates with a powerful slash using its entire body. When swinging the claws, rocks are launched forward in a fan shape.",["Cryolinx Terra"]],
+["Sumo Stomp","Terre",550,24,0,0,"Bulldosu's exclusive skill. Raises its right hind leg high and stomps the ground, creating a shockwave that strikes enemies in a fan-shaped area ahead.",["Bulldosu"]],
+["Surfing Slam","Eau",100,120,0,0,"",[]],
+["Sword Charge","Neutre",80,2,0,0,"Enchanted Sword's exclusive skill. Lunges forward to deliver a sharp thrust.",[]],
+["Tail Slash","Dragon",550,24,0,0,"Eidrolon's exclusive skill. Closes in on the enemy at high speed to deliver a cleaving swipe with its tail.",["Eidrolon"]],
+["Tempest Blizzard","Glace",90,15,0,0,"Vanwyrm Cryst's exclusive skill. Advances while exhaling cold air from its mouth.",["Vanwyrm Cryst"]],
+["Thalassonic Laser","Eau",200,60,0,0,"Neptilius's exclusive skill. Rising slightly, it gathers water at its mouth, then sweeps a high-pressure stream vertically and horizontally three times. Fissures form at the swept locations, erupting with water.",["Neptilius"]],
+["Thunder Rail","Electrique",600,30,0,1,"Charge the power of lightning to the limit and fires multiple simultaneous electric shocks at the enemy.",["Azurmane","Puffolt","Slowatt","Snock"]],
+["Thunder Rain","Electrique",135,45,1,0,"Calls lightning that strikes an enemy after a set amount of time has passed.",["Dazzi Noct","Fenglope Lux","Helzephyr Lux"]],
+["Thunder Spear","Electrique",40,2,1,0,"Fires a high-speed lightning spear straight ahead towards the enemy.",["Celaray Lux","Pengullet Lux","Penking Lux","Slowatt"]],
+["Thunder Tempest","Electrique",90,15,0,0,"Charges forward while manipulating the atmosphere and enveloping itself in thunderclouds.",["Fenglope Lux"]],
+["Thunderslide","Electrique",145,35,0,0,"Penking Lux's exclusive skill. Lies on its belly while generating electric charge all around it before sliding at enemies at high speed.",["Penking Lux"]],
+["Thunderstorm","Electrique",600,30,1,0,"Generates a huge tornado of lightning that moves slowly towards the enemy.",["Celaray Lux","Fenglope Lux","Helzephyr Lux","Penking Lux"]],
+["Tidal Charge","Eau",400,20,0,0,"Panthalus's exclusive skill. Slams the body into the enemy, generating a massive wave on impact.",["Panthalus"]],
+["Tornado Attack","Neutre",65,13,0,0,"Nitewing's exclusive skill. Generates a tornado before soaring towards its target.",["Nitewing"]],
+["Torrential Blast","Eau",250,12,1,0,"Fires a high-pressure stream of water forward. After a short delay, the stream branches off to the left and right.",["Amione","Celaray Lux","Dumud Gild","Finsider","Gloopie","Killamari Primo","Munchill","Neptilius","Ophydia","Skutlass","Solmora","Turtacle"]],
+["Tri-Lightning","Electrique",90,22,1,0,"Generates lightning that strikes an enemy three times from above.",["Beakon","Dazzi","Dazzi Noct","Dinossom Lux","Grizzbolt","Jolthog","Jormuntide","Jormuntide Ignis","Kingpaca","Mossanda Lux","Orserk","Sparkit","Univolt"]],
+["TriSpark","Electrique",250,12,1,0,"A high-speed lightning ball that flies in a straight line. Simultaneously fires slow lightning balls that track the enemy.",["Azurmane","Helzephyr Lux","Pengullet Lux","Penking Lux","Puffolt","Slowatt","Snock"]],
+["Trigger Happy","Eau",115,24,0,0,"Finsider's exclusive skill. Draws twin water blasters from its mouth, firing six shots alternately left and right, then finishes by combining both blasters to unleash one powerful shot.",["Finsider","Finsider Ignis"]],
+["Twin Spears","Tenebres",120,40,0,0,"Necromus' exclusive skill. Clads its twin spears with vicious whirlwinds and charges forward, thrusting them one after the other.",["Necromus"]],
+["Umbral Surge","Tenebres",40,2,1,0,"Fires a high speed ball of dark energy that spreads forward in a radial shape.",["Bellanoir","Bellanoir Libero","Bushi Noct","Jellroy","Nitemary","Omascul","Smokie","Splatterina","Tarantriss","Wixen Noct","Xenolord","Xenovader"]],
+["Upper Smash","Tenebres",110,24,0,0,"Prixter's exclusive skill. Closes the distance to the enemy at high speed, then attacks decisively with its pincers.",["Prixter"]],
+["Use Weapon","Neutre",50,5,0,0,"Attack with held weapon.",[]],
+["Volcanic Burst","Feu",100,45,0,0,"Reptyro's exclusive skill. Raises its front legs before slamming them into the ground, causing volcanic eruptions under its enemies. It simultaneously bombards them with volcanic bombs from above.",["Reptyro"]],
+["Volcanic Fang","Feu",125,30,0,0,"Blazehowl's exclusive skill. With momentum, it pounces mercilessly on the enemy and causes an explosion of fire at the point of impact.",["Blazehowl","Blazehowl Noct"]],
+["Volcanic Rain","Feu",450,20,1,0,"Fires countless volcanic bombs into the sky. After a while, the bombs rain down around their originator.",["Flaracle","Fuack Ignis","Majex","Moldron","Sootseer","Tanzee Ignis","Whalaska Ignis"]],
+["Webstrike Impact","Tenebres",85,14,0,0,"Tarantriss's exclusive skill. Spits out a ball of thread, entangling the target it hits. Then, rushes at full speed to the trapped target and delivers three slashing strikes to finish it off.",["Tarantriss"]],
+["Wholehearted Stance","Neutre",170,30,0,0,"Dogen's exclusive skill. Adopts an aiki stance. While in stance, any attack is nullified, then instantly countered with a full-force palm strike.",["Dogen"]],
+["Wind Barrier","Herbe",60,60,0,0,"A skill exclusive to the Lilikin species. Surround yourself with a wind barrier, Returns the blade of wind to the attacking opponent.",[]],
+["Wind Burst","Herbe",600,30,1,0,"Summons a massive wind vortex around itself and unleashes a powerful attack.",["Carnibora","Clovee","Dualith","Elgrove","Leafan","Lifmunk","Needoll","Ophydia","Souffline"]],
+["Wind Cutter","Herbe",40,2,1,0,"Fires a high speed blade of wind that flies straight at an enemy.",["Beegarde","Bristla","Broncherry","Bushi","Caprity","Caprity Noct","Cattiva","Cinnamoth","Dinossom","Elizabee","Flopie","Galeclaw","Gumoss","Hangyu","Herbil","Lifmunk","Lullu","Lyleen","Nitewing","Petallia","Prunelia","Quivern Botan","Ribbuny Botan","Robinquill","Robinquill Terra","Souffline","Tanzee","Vaelet","Verdash","Vixy","Warsect","Woolipop","Wumpo","Wumpo Botan"]],
+["Wind Edge","Herbe",200,12,0,1,"Launches sharp blades of air that fan out.",["Leafan","Palumba","Ribbuny Botan","Warsect Terra"]],
+["Winged Assault","Neutre",70,2,0,0,"Cave Bat's exclusive skill. Using its whole body, it lunges at the enemy, bouncing off the ground or walls on impact.",[]]
+];
+
+/* Catalogue des passifs. [nom, rang, description, [Pals qui l'ont d'origine]]
+   Le rang va de -3 (malus) à 4 (légendaire). La liste de Pals n'est remplie
+   que pour la trentaine d'espèces au trait inné ; pour tous les autres, un
+   passif s'obtient au hasard et ne dépend pas de l'espèce. */
+const PSKILLS=[
+["Abnormal",1,"10% decrease to incoming Neutral damage",["Lovander"]],
+["Ace Swimmer",3,"40% increase movement speed on water.",[]],
+["Aggressive",1,"Attack +10% Defense -10%",[]],
+["Artisan",3,"Work speed +50%",[]],
+["Blood of the Dragon",1,"10% increase to Dragon attack damage",[]],
+["Botanical Barrier",1,"10% decrease to incoming Grass damage",[]],
+["Bottomless Stomach",-2,"Satiety drops +15% faster",[]],
+["Brave",1,"Attack +10%",[]],
+["Brittle",-3,"Defense -20%",[]],
+["Burly Body",3,"Defense +20%",[]],
+["Capacitor",1,"10% increase to Electric attack damage",[]],
+["Celestial Emperor",3,"20% increase to Neutral attack damage",["Paladius"]],
+["Cheery",1,"10% decrease to incoming Dark damage",[]],
+["Clumsy",-1,"Work Speed -10%",[]],
+["Coldblooded",1,"10% increase to Ice attack damage",[]],
+["Conceited",1,"Work Speed +10% Defense -10%",[]],
+["Coward",-1,"Attack -10%",["Cattiva"]],
+["Dainty Eater",1,"Satiety drops +10% slower",[]],
+["Demon God",4,"Attack +30% Defense +5%",[]],
+["Destructive",-2,"SAN drops +15% faster",[]],
+["Diamond Body",4,"Defense +30%",[]],
+["Diet Lover",3,"Satiety drops +15% slower",[]],
+["Divine Dragon",3,"20% increase to Dragon attack damage",["Jetragon"]],
+["Downtrodden",-1,"Defense -10%",[]],
+["Dragonkiller",1,"10% decrease to incoming Dragon damage",[]],
+["Earth Emperor",3,"20% increase to Ground attack damage",["Anubis"]],
+["Earthquake Resistant",1,"10% decrease to incoming Ground damage",[]],
+["Easygoing",-1,"Active skill cooldown extension -15%",[]],
+["Eternal Engine",4,"Max stamina +75%. This effect is only valid for rideable pals.",[]],
+["Eternal Flame",3,"30% increase to Fire attack damage. 30% increase to Electric attack damage.",["Blazamut Ryu"]],
+["Ferocious",3,"Attack +20%",[]],
+["Fine Furs",1,"Sale price +3%",[]],
+["Fit as a Fiddle",1,"Max stamina +25%. This effect is only valid for rideable pals.",[]],
+["Flame Emperor",3,"20% increase to Fire attack damage",["Blazamut"]],
+["Fragrant Foliage",1,"10% increase to Grass attack damage",[]],
+["Glutton",-1,"Satiety drops +10% faster",["Relaxaurus"]],
+["Hard Skin",1,"Defense +10%",["Astegon","Digtoise","Warsect","Warsect Terra"]],
+["Heart of the Immovable King",4,"SAN drops +20% slower",[]],
+["Heated Body",1,"10% decrease in incoming Ice damage.",[]],
+["Hooligan",1,"Attack 15% Work Speed -10%",["Gorirat","Gorirat Terra"]],
+["Hydromaniac",1,"10% increase in Water attack damage.",[]],
+["Ice Emperor",3,"20% increase in Ice attack damage.",["Frostallion"]],
+["Idiosyncratic",4,"Pal and Player Auto Health Regeneration Rate +50% Defense +25% Immune to Poison Damage Immune to Burn Damage",[]],
+["Immortality",4,"Life Steal +5% Pal Auto Health Regeneration Rate +100% Attack +15%",[]],
+["Imortality",4,"Life steal +5% Pal auto regeneration rate +100.0% Attack +15%",[]],
+["Impatient",1,"Active skill cooldown reduction 15%",[]],
+["Infinite Stamina",3,"Max stamina +50% (This effect is only valid for rideable pals.)",[]],
+["Insomnia",1,"Does not sleep and continues to work even at night.",[]],
+["Insulated Body",1,"10% decrease in incoming Lightning damage.",[]],
+["Invader",4,"30% increase in Dark attack damage. 30% increase in Dragon attack damage.",["Xenolord"]],
+["King of the Waves",4,"50% increase movement speed on water.",[]],
+["Legend",4,"Attack +20% Defense +20% Movement Speed increases 15%",["Frostallion","Frostallion Noct","Jetragon","Necromus","Neptilius","Paladius","Panthalus"]],
+["Logging Foreman",3,"25% increase in Player Logging Efficiency.",[]],
+["Lord of Lightning",3,"20% increase in Lightning attack damage.",["Orserk"]],
+["Lord of the Sea",3,"20% increase in Water attack damage.",["Jormuntide"]],
+["Lord of the Underworld",3,"20% increase in Dark attack damage.",["Frostallion Noct","Necromus"]],
+["Lucky",4,"Attack 15% Defense 15% Work Speed 20%",[]],
+["Lunker",4,"20% increase to Water attack damage 20% increase to Ice attack damage 20% increase to defense.",["Neptilius"]],
+["Masochist",1,"Defense 15% Attack -15%",[]],
+["Mastery of Fasting",4,"Hunger decreases +20.0% slower.",[]],
+["Mercy Hit",-1,"Pacifist. Will not reduce the target's Health below 1.",[]],
+["Mine Foreman",3,"25% increase in Player Mining Efficiency.",[]],
+["Motivational Leader",3,"25% increase in Player Work Speed.",[]],
+["Musclehead",2,"Attack 30% Work Speed -50%",[]],
+["Nimble",1,"10% increase to movement speed.",[]],
+["Noble",3,"Increases the value of items when sold by +5%",[]],
+["Otherworldly Cells",1,"Attack +10% Fire damage reduction 15% Lightning damage reduction 15%",["Xenogard","Xenolord","Xenovader"]],
+["Pacifist",-3,"Attack -20%",[]],
+["Philanthropist",3,"When assigned to a Breeding Farm, breeding speed is increased by 100%.",[]],
+["Positive Thinker",1,"SAN drops +10.0% slower.",[]],
+["Power of Gaia",1,"10% increase in Earth attack damage.",[]],
+["Pyromaniac",1,"10% increase in Fire attack damage.",[]],
+["Ranch Master",4,"Farming's Work Suitability +2.",[]],
+["Remarkable Craftsmanship",4,"Work Speed 75%",[]],
+["Runner",3,"20% increase to movement speed.",[]],
+["Sadist",1,"Attack 15% Defense -15%",["Splatterina"]],
+["Savior",4,"30% increase in Neutral attack damage. 30% increase in Grass attack damage.",["Hartalis"]],
+["Serenity",3,"Active skill cooldown reduction 30% Attack +10%",[]],
+["Serious",1,"Work Speed 20%",[]],
+["Shabby",-1,"Decrease the value of items when sold by -10%",[]],
+["Sickly",-1,"Max Stamina -25% *This effect is only valid for rideable pals.",[]],
+["Siren of the Void",4,"30% increase in Dark attack damage. 30% increase in Ice attack damage.",["Bellanoir Libero"]],
+["Slacker",-3,"Work Speed -30%",[]],
+["Sleek Stroke",1,"30% increase movement speed on water.",[]],
+["Spirit Emperor",3,"20% increase in Grass attack damage.",["Lyleen"]],
+["Stronghold Strategist",3,"10% increase in Player Defense.",[]],
+["Suntan Lover",1,"10% decrease in incoming Fire damage.",[]],
+["Swift",4,"30% increase to movement speed.",[]],
+["Test",0,"",[]],
+["Unstable",-1,"SAN drops +10.0% faster.",[]],
+["Vampiric",4,"Absorbs a portion of the damage dealt to restore . Does not sleep at night and continues to work.",[]],
+["Vanguard",3,"10% increase in Player Attack.",[]],
+["Veil of Darkness",1,"10% increase in Dark attack damage.",[]],
+["Waterproof",1,"10% decrease in incoming Water damage.",[]],
+["Work Slave",1,"Work Speed 30% Attack -30%",[]],
+["Workaholic",3,"SAN drops +15.0% slower.",[]],
+["Zen Mind",1,"10% increase in Neutral attack damage.",[]]
+];
+
 const D = P.map((p,i)=>{
   const m = M[p[0]] || null;
   const fly    = m && m.k==="fly"    ? m : null;
@@ -1026,7 +1470,23 @@ const MAXT=Math.max(...D.map(x=>x.t)), MAX1=200;
    dessus renverrait « 0 Pal », ce qui se lirait comme « aucun ne l'exerce »
    au lieu de « nous n'en savons rien ». */
 const JOBS_SOURCED=new Set(JOBS.map(([k])=>k).filter(k=>D.some(p=>p.w&&p.w[k])));
-const state={q:"",els:new Set(),role:"",job:"",sort:"i",dir:-1};
+const state={
+  view:"pals",                 // pals | skills | passives
+  q:"",els:new Set(),role:"",job:"",sort:"i",dir:-1,
+  sortS:"n",dirS:1,            // tri du catalogue de compétences
+  sortP:"r",dirP:-1,           // tri du catalogue de passifs
+};
+
+/* Chaque vue déclare ce qui la concerne : les contrôles hors sujet sont
+   masqués plutôt que laissés inertes, et la recherche s'annonce clairement. */
+const VIEWS={
+  pals:    {label:"Pals",         n:()=>D.length,       ph:"Chercher un Pal…",
+            table:"t-pals",    ctl:["sort","job","role"], chips:true},
+  skills:  {label:"Compétences",  n:()=>ASKILLS.length, ph:"Chercher une compétence…",
+            table:"t-skills",  ctl:[],                   chips:true},
+  passives:{label:"Passifs",      n:()=>PSKILLS.length, ph:"Chercher un passif…",
+            table:"t-passives",ctl:[],                   chips:false},
+};
 
 /* Remplissage du sélecteur de métiers */
 const jobSel=document.getElementById("job");
@@ -1040,6 +1500,57 @@ jobSel.appendChild(Object.assign(document.createElement("option"),
 jobSel.onchange=e=>{state.job=e.target.value;render()};
 
 /* --- chips d'élément --- */
+/* --- Onglets de catalogue --- */
+const viewBar=document.getElementById("views");
+Object.entries(VIEWS).forEach(([k,v])=>{
+  const b=document.createElement("button");
+  b.type="button"; b.dataset.v=k; b.setAttribute("role","tab");
+  b.setAttribute("aria-selected",String(k===state.view));
+  b.innerHTML=`${v.label}<b>${v.n()}</b>`;
+  b.onclick=()=>setView(k);
+  /* Flèches gauche/droite entre onglets : c'est le comportement attendu
+     d'un tablist, la tabulation seule ne suffit pas. */
+  b.onkeydown=e=>{
+    const keys=Object.keys(VIEWS), i=keys.indexOf(k);
+    if(e.key==="ArrowRight"||e.key==="ArrowLeft"){
+      e.preventDefault(); e.stopPropagation();
+      const n=keys[(i+(e.key==="ArrowRight"?1:keys.length-1))%keys.length];
+      setView(n); viewBar.querySelector(`[data-v="${n}"]`).focus();
+    }
+  };
+  viewBar.appendChild(b);
+});
+
+function setView(v){
+  if(v===state.view) return;
+  state.view=v;
+  /* La recherche et les éléments valent d'une vue à l'autre ; les filtres
+     propres aux Pals, non — les laisser actifs masquerait des résultats
+     sans que le contrôle correspondant soit visible. */
+  state.job=""; state.role="";
+  document.getElementById("job").value="";
+  document.getElementById("role").value="";
+  if(!VIEWS[v].chips){ state.els.clear();
+    chips.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed","false")); }
+  cursor=-1;
+  render();
+}
+
+function syncViews(){
+  const cfg=VIEWS[state.view];
+  viewBar.querySelectorAll("button").forEach(b=>
+    b.setAttribute("aria-selected",String(b.dataset.v===state.view)));
+  Object.values(VIEWS).forEach(v=>
+    document.getElementById(v.table).hidden = v.table!==cfg.table);
+  ["sort","job","role"].forEach(id=>
+    document.getElementById(id).hidden = !cfg.ctl.includes(id));
+  chips.hidden=!cfg.chips;
+  const q=document.getElementById("q");
+  q.placeholder=cfg.ph;
+  q.setAttribute("aria-label",cfg.ph.replace("…",""));
+  if(state.view!=="pals") document.getElementById("gap").hidden=true;
+}
+
 const chips=document.getElementById("chips");
 Object.keys(EL).forEach(k=>{
   const b=document.createElement("button");
@@ -1144,8 +1655,71 @@ function filtered(){
 
 const rows=document.getElementById("rows");
 let searchTimer=0; // rendu différé de la recherche, cf. le gestionnaire oninput
+/* ---------- Catalogue des compétences ---------- */
+/* Indices dans ASKILLS : 0 nom, 1 élément, 2 puissance, 3 recharge,
+   4 fruit, 5 boss, 6 description, 7 Pals. */
+function filteredSkills(){
+  const q=state.q.trim().toLowerCase();
+  const out=ASKILLS.filter(s=>{
+    if(q && !s[0].toLowerCase().includes(q) && !s[6].toLowerCase().includes(q)) return false;
+    if(state.els.size && !state.els.has(s[1])) return false;
+    return true;
+  });
+  const k=state.sortS, d=state.dirS;
+  out.sort((a,b)=> k==="n" ? a[0].localeCompare(b[0])*d
+                 : k==="p" ? (a[2]-b[2])*d
+                 : k==="c" ? (a[3]-b[3])*d
+                 : (a[7].length-b[7].length)*d);
+  return out;
+}
+function renderSkills(){
+  const list=filteredSkills();
+  document.getElementById("count").textContent=`${list.length} / ${ASKILLS.length} compétences`;
+  document.getElementById("empty").hidden=list.length>0;
+  document.getElementById("rows-skills").innerHTML=list.map((s,i)=>`
+    <tr data-s="${i}" tabindex="0">
+      <td><span class="pname">${s[0]}</span>${s[5]?'<span class="tagline">boss</span>':""}${
+        s[4]?'<span class="tagline">fruit</span>':""}</td>
+      <td class="hide-s">${tag(s[1])}</td>
+      <td class="num" data-l="Puis.">${s[2]||"—"}</td>
+      <td class="num" data-l="Rech.">${s[3]?s[3]+"s":"—"}</td>
+      <td class="num hide-s" data-l="Pals">${s[7].length||"—"}</td>
+      <td class="hide-s"><span class="desc">${s[6]||"—"}</span></td>
+    </tr>`).join("");
+  skillRows=list;
+}
+
+/* ---------- Catalogue des passifs ---------- */
+/* Indices dans PSKILLS : 0 nom, 1 rang, 2 description, 3 Pals au trait inné. */
+function filteredPassives(){
+  const q=state.q.trim().toLowerCase();
+  const out=PSKILLS.filter(s=>
+    !q || s[0].toLowerCase().includes(q) || s[2].toLowerCase().includes(q));
+  const k=state.sortP, d=state.dirP;
+  out.sort((a,b)=> k==="n" ? a[0].localeCompare(b[0])*d : (a[1]-b[1])*d || a[0].localeCompare(b[0]));
+  return out;
+}
+function renderPassives(){
+  const list=filteredPassives();
+  document.getElementById("count").textContent=`${list.length} / ${PSKILLS.length} passifs`;
+  document.getElementById("empty").hidden=list.length>0;
+  document.getElementById("rows-passives").innerHTML=list.map(s=>`
+    <tr tabindex="0">
+      <td><span class="pname">${s[0]}</span></td>
+      <td class="num" data-l="Rang"><span class="rank" data-r="${s[1]}">${s[1]>0?"+"+s[1]:s[1]}</span></td>
+      <td><span class="desc">${s[2]||"—"}</span></td>
+      <td class="hide-s"><span class="users">${
+        s[3].length ? s[3].map(n=>`<b>${n}</b>`).join(", ") : "—"}</span></td>
+    </tr>`).join("");
+}
+
+let skillRows=[];
+
 function render(){
   clearTimeout(searchTimer); // désamorce un rendu différé encore en attente
+  syncViews();
+  if(state.view==="skills")   return renderSkills();
+  if(state.view==="passives") return renderPassives();
   const {list,unknown}=filtered();
   document.getElementById("count").textContent=`${list.length} / ${D.length} Pals`;
   const gap=document.getElementById("gap");
@@ -1203,6 +1777,7 @@ function open(i){
     <div>
       <p class="mini">Nº ${String(p.i).padStart(3,"0")} · ${rankT}ᵉ au total</p>
       <h2>${p.n}</h2>
+      <div class="slot">${avatar(p,180)}${IMG_BASE?"":`<span class="hint">Dépose ${p.n}${IMG_EXT} dans /img</span>`}</div>
       <div class="eirow">${tag(p.e1,1)}${tag(p.e2,1)}</div>
       <div class="bars">
         ${bar("Points de vie",p.h)}${bar("Attaque",p.a)}${bar("Défense",p.d)}
@@ -1216,8 +1791,6 @@ function open(i){
       ${skillDetail(p)}
       <p class="mini" style="margin-top:22px">Déplacement</p>
       ${mount}
-      <p class="mini">Portrait</p>
-      <div class="slot">${avatar(p,180)}${IMG_BASE?"":`<span class="hint">Dépose ${p.n}${IMG_EXT} dans /img</span>`}</div>
     </div>`;
   sheet.setAttribute("data-open","");
   rows.querySelectorAll("tr").forEach(t=>t.setAttribute("aria-selected",t.dataset.i===String(i)));
@@ -1276,6 +1849,64 @@ function syncHead(){
   });
 }
 
+/* Tri des deux catalogues. Même contrat que les en-têtes des Pals :
+   focusables, Entrée et Espace, aria-sort tenu à jour. */
+[["sk-sortable","sortS","dirS"],["ps-sortable","sortP","dirP"]].forEach(([cls,sk,dk])=>{
+  document.querySelectorAll("th."+cls).forEach(th=>{
+    th.tabIndex=0;
+    const go=()=>{
+      const k=th.dataset.k;
+      if(state[sk]===k) state[dk]*=-1; else {state[sk]=k; state[dk]=k==="n"?1:-1}
+      syncCatHead(cls,sk,dk); render();
+    };
+    th.onclick=go;
+    th.onkeydown=e=>{
+      if(e.key==="Enter"||e.key===" "){ e.preventDefault(); e.stopPropagation(); go(); }
+    };
+  });
+});
+function syncCatHead(cls,sk,dk){
+  document.querySelectorAll("th."+cls).forEach(th=>{
+    if(th.dataset.k===state[sk]){
+      th.setAttribute("data-active","");
+      th.querySelector(".car").textContent=state[dk]<0?"▾":"▴";
+      th.setAttribute("aria-sort",state[dk]<0?"descending":"ascending");
+    } else {
+      th.removeAttribute("data-active");
+      th.setAttribute("aria-sort","none");
+    }
+  });
+}
+
+/* Une compétence : la fiche montre l'effet complet et qui l'apprend. */
+document.getElementById("rows-skills").addEventListener("click",e=>{
+  const tr=e.target.closest("tr"); if(tr) openSkill(+tr.dataset.s);
+});
+document.getElementById("rows-skills").addEventListener("keydown",e=>{
+  if(e.key==="Enter"){ const tr=e.target.closest("tr"); if(tr) openSkill(+tr.dataset.s); }
+});
+function openSkill(i){
+  const s=skillRows[i]; if(!s) return;
+  const learners=s[7];
+  body.innerHTML=`
+    <div>
+      <p class="mini">Compétence active${s[5]?" · boss":""}${s[4]?" · fruit de compétence":""}</p>
+      <h2>${s[0]}</h2>
+      <div class="eirow">${tag(s[1],1)}</div>
+      <p class="desc" style="max-width:52ch">${s[6]||"Aucune description."}</p>
+      <dl><dt>Puissance</dt><dd>${s[2]||"—"}</dd>
+          <dt>Recharge</dt><dd>${s[3]?s[3]+" s":"—"}</dd></dl>
+    </div>
+    <div>
+      <p class="mini">Apprise par ${learners.length} Pal${learners.length>1?"s":""}</p>
+      ${learners.length
+        ? `<p class="users">${learners.map(n=>`<b>${n}</b>`).join(", ")}</p>`
+        : `<p class="todo">Aucun Pal ne l'apprend naturellement.${
+            s[4]?" Elle s'obtient par fruit de compétence.":""}</p>`}
+    </div>`;
+  sheet.setAttribute("data-open","");
+}
+
 /* ---------- Navigation clavier ---------- */
 let cursor=-1;
 
@@ -1285,6 +1916,7 @@ function paintCursor(){
   if(cursor>=0 && trs[cursor]) trs[cursor].scrollIntoView({block:"nearest"});
 }
 function moveCursor(delta){
+  if(state.view!=="pals") return; // le curseur ne pilote que la liste des Pals
   const n=rows.children.length; if(!n) return;
   cursor = cursor<0 ? (delta>0?0:n-1) : Math.min(n-1,Math.max(0,cursor+delta));
   paintCursor();
@@ -1366,6 +1998,8 @@ document.getElementById("doExport").onclick=async()=>{
 };
 
 syncHead(); // pose aria-sort="none" dès le départ, avant toute interaction
+syncCatHead("sk-sortable","sortS","dirS");
+syncCatHead("ps-sortable","sortP","dirP");
 render();
 </script>
 </body>

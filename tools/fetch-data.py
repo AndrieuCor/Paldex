@@ -11,8 +11,12 @@ des fichiers du jeu, ce qui prime sur un wiki communautaire. Le wiki ne sert
 donc qu'à combler les trous, jamais à corriger l'existant. Les divergences
 sont signalées en fin de course pour arbitrage manuel.
 
-SKILLS, à l'inverse, est régénéré intégralement : il était vide au départ.
-Toute retouche manuelle y serait donc écrasée au prochain passage.
+SKILLS et PASSIVES, à l'inverse, sont régénérés intégralement : ils étaient
+vides au départ. Toute retouche manuelle y serait écrasée au prochain passage.
+
+Les passifs ici sont les traits innés à l'espèce (Legend, Earth Emperor…),
+que seule une trentaine de Pals possède — pas les passifs aléatoires obtenus
+à la capture, qui ne dépendent pas de l'espèce.
 
 Les Pals que le wiki ne documente pas restent absents de WORK, ce que la page
 distingue d'un Pal sans aptitude : voir le compteur « statut inconnu ».
@@ -111,16 +115,45 @@ def fmt_work(work, names):
     return "\n".join(lines).rstrip(",")
 
 
+def js_str(v):
+    """Échappe une chaîne pour l'insérer dans un littéral JavaScript."""
+    return str(v).replace("\\", "\\\\").replace('"', '\\"')
+
+
 def fmt_skills(skills, names):
     lines = []
     for n in names:
         if n not in skills:
             continue
         items = ",".join(
-            '["{}","{}",{},{},{}]'.format(*s) for s in skills[n]
+            '["{}","{}",{},{},{}]'.format(js_str(s[0]), s[1], s[2], s[3], s[4])
+            for s in skills[n]
         )
         lines.append(f'"{n}":[{items}],')
     return "\n".join(lines).rstrip(",")
+
+
+def clean_wikitext(s):
+    """Rend une description lisible hors du wiki.
+
+    Les champs Cargo contiennent du wikitexte et du HTML : icônes de fichier,
+    liens internes, sauts de ligne balisés. On garde le texte, on jette le
+    balisage — sans quoi l'utilisateur lirait « [[File:Neutral icon.png|… ».
+    """
+    s = str(s or "")
+    s = re.sub(r"<span[^>]*>|</span>", "", s)          # enveloppes d'icônes
+    s = re.sub(r"\[\[File:[^\]]*\]\]", "", s)          # images
+    s = re.sub(r"\[\[[^\]|]*\|([^\]]*)\]\]", r"\1", s)  # [[cible|libellé]]
+    s = re.sub(r"\[\[([^\]]*)\]\]", r"\1", s)          # [[libellé]]
+    s = re.sub(r"<br\s*/?>", " ", s)                   # retours à la ligne
+    s = re.sub(r"<[^>]+>", "", s)                      # tout HTML restant
+    s = s.replace("&nbsp;", " ").replace("&amp;", "&")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def fmt_catalog(rows):
+    """Une entrée par ligne : lisible en diff, et le fichier reste éditable."""
+    return "\n".join(f"{r}," for r in rows).rstrip(",")
 
 
 def main():
@@ -144,7 +177,14 @@ def main():
         "ActiveSkill.cooldownTime",
         join="PalActiveSkill.activeSkillName=ActiveSkill.activeSkillName",
     )
-    print(f"  {len(ws)} aptitudes, {len(sk)} compétences, {len(pal)} fiches Pal")
+    pas = cargo("PalPassiveSkill", "palName,passiveSkillName")
+    all_sk = cargo("ActiveSkill",
+                   "activeSkillName,element,power,cooldownTime,"
+                   "isSkillFruit,isBossSkill,description")
+    all_pas = cargo("PassiveSkill", "passiveSkillName,rank,description")
+    print(f"  {len(ws)} aptitudes, {len(sk)} liens Pal-compétence, "
+          f"{len(pas)} liens Pal-passif")
+    print(f"  catalogues : {len(all_sk)} compétences, {len(all_pas)} passifs")
 
     nocturnal = {r["palName"] for r in pal if r.get("isNocturnal") == "1"}
 
@@ -188,9 +228,56 @@ def main():
     for n in skills:
         skills[n].sort(key=lambda s: s[4])
 
+    # --- Catalogue des compétences actives -------------------------------
+    # Quels Pals apprennent quoi : c'est le renseignement utile quand on
+    # parcourt les compétences plutôt que les Pals.
+    learners = {}
+    for r in sk:
+        if r["palName"] in known:
+            learners.setdefault(r["activeSkillName"], []).append(r["palName"])
+
+    askills = []
+    for r in sorted(all_sk, key=lambda r: r["activeSkillName"]):
+        el = ELEMENTS.get(r.get("element") or "")
+        pals = sorted(set(learners.get(r["activeSkillName"], [])))
+        askills.append(
+            '["{}","{}",{},{},{},{},"{}",[{}]]'.format(
+                js_str(r["activeSkillName"]),
+                el or "",
+                int(r["power"] or 0),
+                int(float(r["cooldownTime"] or 0)),
+                1 if r.get("isSkillFruit") == "1" else 0,
+                1 if r.get("isBossSkill") == "1" else 0,
+                js_str(clean_wikitext(r.get("description"))),
+                ",".join(f'"{js_str(p)}"' for p in pals),
+            )
+        )
+
+    # --- Catalogue des passifs -------------------------------------------
+    innate = {}
+    for r in pas:
+        if r["palName"] in known:
+            innate.setdefault(r["passiveSkillName"], []).append(r["palName"])
+
+    pskills = []
+    for r in sorted(all_pas, key=lambda r: r["passiveSkillName"]):
+        rank = (r.get("rank") or "").strip()
+        pals = sorted(set(innate.get(r["passiveSkillName"], [])))
+        pskills.append(
+            '["{}",{},"{}",[{}]]'.format(
+                js_str(r["passiveSkillName"]),
+                int(rank) if rank.lstrip("-").isdigit() else 0,
+                js_str(clean_wikitext(r.get("description"))),
+                ",".join(f'"{js_str(p)}"' for p in pals),
+            )
+        )
+
     # --- Bilan -----------------------------------------------------------
-    print(f"\nWORK   : {len(existing)} -> {len(work)} / {len(names)} Pals")
-    print(f"SKILLS :   0 -> {len(skills)} / {len(names)} Pals")
+    print(f"\nWORK     : {len(existing)} -> {len(work)} / {len(names)} Pals")
+    print(f"SKILLS   : {len(skills)} / {len(names)} Pals")
+    print(f"ASKILLS  : {len(askills)} compétences au catalogue")
+    print(f"PSKILLS  : {len(pskills)} passifs au catalogue "
+          f"({len(innate)} liés à une espèce)")
     if skipped:
         print(f"Types de travail non reconnus : {sorted(skipped)}")
     if incomplete:
@@ -215,8 +302,14 @@ def main():
     out = re.sub(r"(const WORK=\{\n).*?(\n\};)",
                  lambda m: m.group(1) + fmt_work(work, names) + m.group(2),
                  src, count=1, flags=re.S)
-    out = re.sub(r"const SKILLS=\{.*?\};",
+    out = re.sub(r"const SKILLS=\{.*?\n\};",
                  "const SKILLS={\n" + fmt_skills(skills, names) + "\n};",
+                 out, count=1, flags=re.S)
+    out = re.sub(r"const ASKILLS=\[.*?\n\];",
+                 "const ASKILLS=[\n" + fmt_catalog(askills) + "\n];",
+                 out, count=1, flags=re.S)
+    out = re.sub(r"const PSKILLS=\[.*?\n\];",
+                 "const PSKILLS=[\n" + fmt_catalog(pskills) + "\n];",
                  out, count=1, flags=re.S)
     if out == src:
         sys.exit("Aucune substitution effectuée — le format a changé ?")
