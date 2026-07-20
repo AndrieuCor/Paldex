@@ -427,8 +427,9 @@ footer{border-top:1px solid var(--line);padding:26px 22px 40px;color:var(--muted
     <p>Colle un tableau copié depuis un wiki, une ligne par Pal, colonnes séparées
       par des tabulations. Le nom doit correspondre exactement à celui du Paldeck.
       Ordre des colonnes :<br>
-      <code>Nom · Élevage · Électricité · Allumage · Récolte · Transport · Plantation ·
-      Arrosage · Médecine · Artisanat · Minage · Bûcheronnage · Réfrigération · Nuit(Y/N)</code><br>
+      <code>Nom · Exploitation · Génération d'énergie · Allumage de feu · Collecte ·
+      Transport · Semence · Arrosage · Pharmacie · Artisanat · Extraction · Abattage ·
+      Réfrigération · Nuit(Y/N)</code><br>
       Les cases vides valent zéro.</p>
     <textarea id="paste" placeholder="Anubis	 	 	 	 	3	 	 	 	6	4	 	 	N"></textarea>
     <button id="doImport">Importer</button>
@@ -706,10 +707,15 @@ const SWIM_ALSO = {
 
 /* Les 12 métiers de base. Code court -> libellé.
    Niveaux 1 à 5 (le condenseur 4 étoiles ajoute +1). */
+/* Libellés relevés dans le jeu en français, pas traduits ici : un joueur
+   cherche « Pharmacie », le terme que son client affiche. Le minage s'appelle
+   « Extraction », d'où la précision « (pétrole) » sur le treizième métier,
+   que le jeu nomme autrement mais qu'aucune source ne documente. */
 const JOBS=[
- ["ki","Allumage"],["wa","Arrosage"],["pl","Plantation"],["el","Électricité"],
- ["ha","Artisanat"],["ga","Récolte"],["lu","Bûcheronnage"],["mi","Minage"],
- ["me","Médecine"],["co","Réfrigération"],["tr","Transport"],["fa","Élevage"],["oi","Extraction de pétrole"]
+ ["ki","Allumage de feu"],["wa","Arrosage"],["pl","Semence"],["el","Génération d'énergie"],
+ ["ha","Artisanat"],["ga","Collecte"],["lu","Abattage"],["mi","Extraction"],
+ ["me","Pharmacie"],["co","Réfrigération"],["tr","Transport"],["fa","Exploitation"],
+ ["oi","Extraction (pétrole)"]
 ];
 const JOBNAME=Object.fromEntries(JOBS);
 
