@@ -58,6 +58,11 @@ JOBS = {
     "Oil Extraction": "oi",
 }
 
+# Divergences vérifiées en jeu sur un Pal non condensé : le wiki a tort,
+# index.html a raison. On les tait pour qu'une nouvelle divergence ressorte
+# au lieu de se noyer parmi des questions déjà réglées.
+ARBITRATED = {"Cinnamoth", "Herbil", "Kingpaca", "Penking Lux"}
+
 # Éléments Cargo -> clés de l'objet EL.
 ELEMENTS = {
     "Neutral": "Neutre", "Fire": "Feu", "Water": "Eau", "Grass": "Herbe",
@@ -340,10 +345,15 @@ def main():
     for i in range(0, len(absent), 4):
         print("  " + ", ".join(absent[i:i + 4]))
 
-    if conflicts:
-        print(f"\n{len(conflicts)} divergence(s) — l'existant est conservé, "
-              "à arbitrer à la main :")
-        for n, a, b in conflicts:
+    settled = [c for c in conflicts if c[0] in ARBITRATED]
+    pending = [c for c in conflicts if c[0] not in ARBITRATED]
+    if settled:
+        print(f"\n{len(settled)} divergence(s) déjà tranchée(s) en jeu, "
+              f"index.html conservé : {', '.join(c[0] for c in settled)}")
+    if pending:
+        print(f"\n{len(pending)} divergence(s) NON arbitrée(s) — l'existant est "
+              "conservé, à vérifier en jeu sur un Pal non condensé :")
+        for n, a, b in pending:
             print(f"  {n}\n     index.html : {a}\n     wiki       : {b}")
 
     if args.dry_run:
