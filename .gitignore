@@ -1,1 +1,4 @@
 .vercel
+
+# Sauvegardes de joueur : donnees personnelles, jamais versionnees ni deployees
+*.sav

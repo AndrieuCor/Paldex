@@ -42,6 +42,13 @@ API = "https://palworld.wiki.gg/api.php"
 UA = "Paldex/1.0 (projet perso non commercial; +https://github.com/AndrieuCor/Paldex)"
 PAGE = 500
 
+# Traductions officielles du jeu, extraites des fichiers par Palworld-Pal-Editor.
+# Le wiki source est anglophone et n'expose aucune version française ; les pages
+# traduites de paldb.cc rendent leurs libellés en JavaScript, donc inexploitables
+# ici. Les chaînes elles-mêmes appartiennent à Pocketpair, comme les portraits.
+I18N = ("https://raw.githubusercontent.com/Guineabear/Palworld-Pal-Editor/HEAD/"
+        "src/palworld_pal_editor/assets/data/{}.json")
+
 # Libellés Cargo -> codes courts utilisés par JOBS dans index.html.
 JOBS = {
     "Kindling": "ki", "Watering": "wa", "Planting": "pl",
@@ -133,6 +140,24 @@ def fmt_skills(skills, names):
     return "\n".join(lines).rstrip(",")
 
 
+def fetch_i18n(which, lang="fr"):
+    """Nom et description traduits, indexés par le libellé anglais.
+
+    C'est l'anglais qui sert de clé : c'est la seule chose que les tables
+    Cargo et ces fichiers ont en commun.
+    """
+    req = urllib.request.Request(I18N.format(which), headers={"User-Agent": UA})
+    data = json.load(urllib.request.urlopen(req, timeout=30))
+    out = {}
+    for entry in data.values():
+        i18n = entry.get("I18n") or {}
+        en = (i18n.get("en") or {}).get("Name")
+        loc = i18n.get(lang) or {}
+        if en and loc.get("Name"):
+            out[en] = (loc["Name"], (loc.get("Description") or "").strip())
+    return out
+
+
 def clean_wikitext(s):
     """Rend une description lisible hors du wiki.
 
@@ -186,6 +211,17 @@ def main():
           f"{len(pas)} liens Pal-passif")
     print(f"  catalogues : {len(all_sk)} compétences, {len(all_pas)} passifs")
 
+    tr_sk = fetch_i18n("pal_attacks")
+    tr_pas = fetch_i18n("pal_passives")
+    print(f"  traductions : {len(tr_sk)} compétences, {len(tr_pas)} passifs")
+
+    def fr_name(en, table):
+        """Le français quand il existe, l'anglais sinon — jamais de trou."""
+        return table.get(en, (en, ""))[0]
+
+    def fr_desc(en, table, fallback):
+        return table.get(en, ("", ""))[1] or fallback
+
     nocturnal = {r["palName"] for r in pal if r.get("isNocturnal") == "1"}
 
     # --- Aptitudes de travail -------------------------------------------
@@ -222,7 +258,7 @@ def main():
             incomplete += 1
             continue
         skills.setdefault(n, []).append(
-            (r["activeSkillName"], el, int(r["power"]),
+            (fr_name(r["activeSkillName"], tr_sk), el, int(r["power"]),
              int(float(r["cooldownTime"])), int(r["level"]))
         )
     for n in skills:
@@ -240,16 +276,20 @@ def main():
     for r in sorted(all_sk, key=lambda r: r["activeSkillName"]):
         el = ELEMENTS.get(r.get("element") or "")
         pals = sorted(set(learners.get(r["activeSkillName"], [])))
+        en = r["activeSkillName"]
         askills.append(
-            '["{}","{}",{},{},{},{},"{}",[{}]]'.format(
-                js_str(r["activeSkillName"]),
+            '["{}","{}",{},{},{},{},"{}",[{}],"{}"]'.format(
+                js_str(fr_name(en, tr_sk)),
                 el or "",
                 int(r["power"] or 0),
                 int(float(r["cooldownTime"] or 0)),
                 1 if r.get("isSkillFruit") == "1" else 0,
                 1 if r.get("isBossSkill") == "1" else 0,
-                js_str(clean_wikitext(r.get("description"))),
+                js_str(fr_desc(en, tr_sk, clean_wikitext(r.get("description")))),
                 ",".join(f'"{js_str(p)}"' for p in pals),
+                # Le nom anglais reste accessible : les guides et les vidéos
+                # sont anglophones, et la recherche doit y répondre.
+                js_str(en),
             )
         )
 
@@ -263,12 +303,14 @@ def main():
     for r in sorted(all_pas, key=lambda r: r["passiveSkillName"]):
         rank = (r.get("rank") or "").strip()
         pals = sorted(set(innate.get(r["passiveSkillName"], [])))
+        en = r["passiveSkillName"]
         pskills.append(
-            '["{}",{},"{}",[{}]]'.format(
-                js_str(r["passiveSkillName"]),
+            '["{}",{},"{}",[{}],"{}"]'.format(
+                js_str(fr_name(en, tr_pas)),
                 int(rank) if rank.lstrip("-").isdigit() else 0,
-                js_str(clean_wikitext(r.get("description"))),
+                js_str(fr_desc(en, tr_pas, clean_wikitext(r.get("description")))),
                 ",".join(f'"{js_str(p)}"' for p in pals),
+                js_str(en),
             )
         )
 
@@ -278,6 +320,16 @@ def main():
     print(f"ASKILLS  : {len(askills)} compétences au catalogue")
     print(f"PSKILLS  : {len(pskills)} passifs au catalogue "
           f"({len(innate)} liés à une espèce)")
+
+    no_fr_sk = sorted({r["activeSkillName"] for r in all_sk
+                       if r["activeSkillName"] not in tr_sk})
+    no_fr_pas = sorted({r["passiveSkillName"] for r in all_pas
+                        if r["passiveSkillName"] not in tr_pas})
+    if no_fr_sk or no_fr_pas:
+        print(f"\nSans traduction, laissés en anglais — "
+              f"{len(no_fr_sk)} compétence(s), {len(no_fr_pas)} passif(s) :")
+        for n in no_fr_sk + no_fr_pas:
+            print(f"  · {n}")
     if skipped:
         print(f"Types de travail non reconnus : {sorted(skipped)}")
     if incomplete:
